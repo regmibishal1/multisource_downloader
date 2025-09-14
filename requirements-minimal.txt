@@ -1,0 +1,6 @@
+instaloader
+yt-dlp
+gdown
+PyDrive2
+
+# Install only the providers you need. These are the minimal optional packages.
