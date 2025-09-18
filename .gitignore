@@ -29,3 +29,4 @@ downloader.log
 # Local settings
 .env
 env/
+.sessions/

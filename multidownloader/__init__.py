@@ -1,3 +1,3 @@
-"""Multidownloader package: thin handlers for each source and a core dispatcher."""
+﻿"""Multidownloader package: thin handlers for each source and a core dispatcher."""
 
-__all__ = ["core", "sources"]
+__all__ = ['core', 'sources', 'session_store', 'batch']

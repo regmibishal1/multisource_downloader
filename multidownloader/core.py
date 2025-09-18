@@ -1,10 +1,15 @@
-"""Core dispatcher for the multidownloader package.
+﻿"""Core dispatcher for the multidownloader package.
 
 Provides a Downloader class that delegates to source-specific handlers.
 """
+from .sources.facebook import FacebookHandler
 from .sources.gdrive import GoogleDriveHandler
 from .sources.instagram import InstagramHandler
+from .sources.reddit import RedditHandler
+from .sources.threads import ThreadsHandler
 from .sources.tiktok import TikTokHandler
+from .sources.twitter import TwitterHandler
+from .sources.youtube import YouTubeHandler
 
 
 class Downloader:
@@ -15,7 +20,16 @@ class Downloader:
             'Google Drive': GoogleDriveHandler(logger=logger),
             'Instagram': InstagramHandler(logger=logger),
             'TikTok': TikTokHandler(logger=logger),
+            'Threads': ThreadsHandler(logger=logger),
+            'Twitter': TwitterHandler(logger=logger),
+            'Reddit': RedditHandler(logger=logger),
+            'Facebook': FacebookHandler(logger=logger),
+            'YouTube': YouTubeHandler(logger=logger),
         }
+
+    def list_sources(self):
+        """Return the list of supported source names."""
+        return list(self.handlers.keys())
 
     def download(self, source_name, url, options=None):
         if source_name not in self.handlers:
@@ -35,3 +49,4 @@ class Downloader:
             return handler.interactive_auth(root=root)
         # No interactive auth available
         return None
+
