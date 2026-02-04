@@ -1,0 +1,5 @@
+# Simple YouTube Downloader - Dependencies
+# These are the minimum required packages
+
+yt-dlp>=2026.2.4
+pyinstaller>=6.18.0

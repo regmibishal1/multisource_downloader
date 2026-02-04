@@ -13,6 +13,11 @@ Supported sources (install only the extras you need):
 - Facebook — `yt-dlp`
 - YouTube — `yt-dlp`
 
+Portable Standalone Version
+---------------------------
+
+Looking for a simple, no-installation-required YouTube downloader? Check out the **[Portable Manager](./portable_manager/)** - a standalone `.exe` that anyone can download and run!
+
 Quick start
 -----------
 

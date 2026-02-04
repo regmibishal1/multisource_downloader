@@ -1,0 +1,20 @@
+# Build artifacts
+build/
+dist/
+*.spec
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+*.log
+
+# Cookies (user-specific)
+cookies.txt
+
+# Test downloads
+test/
+test_downloads/
+downloads/
