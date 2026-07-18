@@ -4,11 +4,11 @@ A standalone, portable YouTube video downloader with a simple GUI. Build it your
 
 ## Features
 
-- ✅ **Portable** - Builds to a single exe file, no installation needed
-- ✅ **Simple UI** - Just paste URL and click Download
-- ✅ **Cookie Support** - Download private/age-restricted videos
-- ✅ **Live Progress** - See download progress in real-time
-- ✅ **High-DPI** - Crisp UI on high-resolution displays
+- **Portable** - Builds to a single exe file, no installation needed
+- **Simple UI** - Just paste URL and click Download
+- **Cookie Support** - Download private/age-restricted videos
+- **Live Progress** - See download progress in real-time
+- **High-DPI** - Crisp UI on high-resolution displays
 
 ## Building the Executable
 
@@ -37,7 +37,7 @@ The exe will be created at `dist/SimpleYoutubeDownloader.exe`
 
 ## Usage
 
-1. **Run** `SimpleYoutubeDownloader.exe` (Windows may show a security warning - click "More info" → "Run anyway")
+1. **Run** `SimpleYoutubeDownloader.exe` (Windows may show a security warning - click "More info", then "Run anyway")
 2. **Paste** a YouTube URL
 3. **Click** Download!
 
@@ -46,8 +46,8 @@ The exe will be created at `dist/SimpleYoutubeDownloader.exe`
 If you get "Sign in" errors, import your YouTube cookies:
 
 1. Install **"Get cookies.txt LOCALLY"** extension ([Edge](https://microsoftedge.microsoft.com/addons/search/cookies.txt) | [Chrome](https://chrome.google.com/webstore/search/cookies.txt))
-2. Go to **YouTube** (logged in) → Click extension → **Export All Cookies**
-3. In the app, click **"Import cookies.txt"** → Select your file
+2. Go to **YouTube** (logged in), click the extension, then **Export All Cookies**
+3. In the app, click **"Import cookies.txt"** and select your file
 4. Download again!
 
 ## License

@@ -1,17 +1,17 @@
-﻿Multi-source Downloader
+Multi-source Downloader
 ======================
 
 This project provides a Tkinter UI and a reusable `multidownloader` package for downloading media from multiple platforms. Handlers are modular so they can be used programmatically or from the command line.
 
 Supported sources (install only the extras you need):
-- Google Drive — public downloads via `gdown`, authenticated via `PyDrive2`
-- Instagram — `instaloader` (supports saved sessions and 2FA)
-- TikTok — `yt-dlp`
-- Threads — `yt-dlp`
-- Twitter / X — `yt-dlp`
-- Reddit — `yt-dlp`
-- Facebook — `yt-dlp`
-- YouTube — `yt-dlp`
+- Google Drive: public downloads via `gdown`, authenticated via `PyDrive2`
+- Instagram: `instaloader` (supports saved sessions and 2FA)
+- TikTok: `yt-dlp`
+- Threads: `yt-dlp`
+- Twitter / X: `yt-dlp`
+- Reddit: `yt-dlp`
+- Facebook: `yt-dlp`
+- YouTube: `yt-dlp`
 
 Portable Standalone Version
 ---------------------------
@@ -44,7 +44,7 @@ UI notes
 --------
 
 - Select any supported source from the dropdown. Additional options appear when a source needs them (e.g., Google Drive public vs authenticated, Instagram auth mode, cookie import button for yt-dlp sources).
-- Instagram “Auto” mode silently reuses the cached session in `.sessions/Instagram/`. Use “Authenticated (prompt now)” the first time to sign in and save the session.
+- Instagram "Auto" mode silently reuses the cached session in `.sessions/Instagram/`. Use "Authenticated (prompt now)" the first time to sign in and save the session.
 - For yt-dlp backed platforms (TikTok, Threads, Twitter/X, Reddit, Facebook, YouTube) you can import a browser `cookies.txt` once; the UI copies it into `.sessions/<Source>/cookies.txt` for reuse.
 - Google Drive authenticated downloads reuse cached PyDrive2 credentials stored in `.sessions/GoogleDrive/credentials.json`. Keep your `client_secrets.json` in the project root or copy it into `.sessions/GoogleDrive/` so the handler can locate it during the auth flow.
 
@@ -54,8 +54,8 @@ Batch CLI (loot_report_scraper integration)
 The package exposes a CLI that can read the scraper output (`grouped_by_source.json` or CSV) and queue downloads automatically. Run it from the multisource_downloader project root via the `penv` interpreter:
 
 ```powershell
-# From E:\Personal Project\Python_Projects\multisource_downloader
-.\penv\Scripts\python.exe -m multidownloader.batch ..\loot_report_scraper\results\latest\grouped_by_source.json --out-dir E:\Downloads\loot-media
+# From the multisource_downloader project root
+.\penv\Scripts\python.exe -m multidownloader.batch path\to\grouped_by_source.json --out-dir path\to\downloads
 ```
 
 Options:
@@ -67,9 +67,9 @@ Sessions and credential storage
 -------------------------------
 
 All reusable auth artifacts live under `multidownloader/.sessions/` (already ignored by git):
-- `Instagram/` — saved Instaloader `.session` files and metadata.
-- `GoogleDrive/credentials.json` — PyDrive2 credential cache.
-- `<Source>/cookies.txt` — browser-exported cookies for yt-dlp handlers.
+- `Instagram/`: saved Instaloader `.session` files and metadata.
+- `GoogleDrive/credentials.json`: PyDrive2 credential cache.
+- `<Source>/cookies.txt`: browser-exported cookies for yt-dlp handlers.
 
 The helpers in `multidownloader.session_store` read/write these files and are used by the handlers automatically.
 
@@ -88,8 +88,8 @@ Integration with loot_report_scraper
 The scraper now ships a helper script (`run_downloader.py`) that shells into this project. Set the environment variables:
 
 ```powershell
-$env:MULTIDOWNLOADER_PYTHON = "E:\Personal Project\Python_Projects\multisource_downloader\penv\Scripts\python.exe"
-$env:MULTIDOWNLOADER_ROOT = "E:\Personal Project\Python_Projects\multisource_downloader"
+$env:MULTIDOWNLOADER_PYTHON = "C:\path\to\multisource_downloader\penv\Scripts\python.exe"
+$env:MULTIDOWNLOADER_ROOT = "C:\path\to\multisource_downloader"
 ```
 
 Then from the scraper project run:
@@ -103,5 +103,5 @@ The bridge script invokes `multidownloader.batch` with the latest `grouped_by_so
 Security reminders
 ------------------
 
-- Session files and cookies grant authenticated access—keep `.sessions/` private and never commit its contents.
+- Session files and cookies grant authenticated access. Keep `.sessions/` private and never commit its contents.
 - Rotate cookies or rerun authentication if downloads start failing with auth errors.

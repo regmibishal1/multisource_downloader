@@ -1,4 +1,4 @@
-﻿"""Batch utilities to drive downloads from loot_report_scraper outputs."""
+"""Batch utilities to drive downloads from loot_report_scraper outputs."""
 from __future__ import annotations
 
 import argparse

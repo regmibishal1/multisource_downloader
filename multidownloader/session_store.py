@@ -1,4 +1,4 @@
-﻿"""Local session storage helpers for multidownloader handlers.
+"""Local session storage helpers for multidownloader handlers.
 
 Sessions are stored under a .sessions directory next to this package. The
 intention is to keep reusable auth artifacts (cookies, Instaloader sessions,

@@ -141,7 +141,7 @@ class SimpleDownloaderUI:
         local_cookie = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
         if os.path.exists(local_cookie):
             self.cookie_file = local_cookie
-            self.cookie_status_var.set("✓ cookies.txt loaded")
+            self.cookie_status_var.set("cookies.txt loaded")
             self.cookie_status.config(foreground="green")
             self._log("Found existing cookies.txt file")
 
@@ -156,7 +156,7 @@ class SimpleDownloaderUI:
                 dest = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
                 shutil.copy2(path, dest)
                 self.cookie_file = dest
-                self.cookie_status_var.set("✓ cookies.txt imported!")
+                self.cookie_status_var.set("cookies.txt imported")
                 self.cookie_status.config(foreground="green")
                 self._log(f"Imported cookies from: {path}")
             except Exception as e:

@@ -1,4 +1,4 @@
-﻿"""TikTok handler using yt-dlp."""
+"""TikTok handler using yt-dlp."""
 from __future__ import annotations
 
 from .yt_dlp_base import YtDlpHandler
