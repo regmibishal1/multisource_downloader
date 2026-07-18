@@ -1,4 +1,4 @@
-﻿"""Google Drive handler (public via gdown, authenticated via PyDrive2)."""
+"""Google Drive handler (public via gdown, authenticated via PyDrive2)."""
 from __future__ import annotations
 
 import logging
@@ -81,7 +81,9 @@ class GoogleDriveHandler:
             raise RuntimeError('gdown not available')
         self.logger.info('Downloading public drive file: %s -> %s', url, out_dir)
         try:
-            gdown.download(url, output=os.path.join(out_dir, ''), quiet=False)
+            # fuzzy lets gdown pull the file id out of any drive URL shape,
+            # including the common /file/d/<id>/view share links
+            gdown.download(url, output=os.path.join(out_dir, ''), quiet=False, fuzzy=True)
             return True
         except Exception as exc:  # pragma: no cover - network call
             raise RuntimeError(f'gdown failed: {exc}')

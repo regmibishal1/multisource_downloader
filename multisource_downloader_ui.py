@@ -1,4 +1,4 @@
-﻿"""
+"""
 Multi-source downloader UI
 
 Supports Google Drive, Instagram, TikTok, Threads, Twitter/X, Reddit, Facebook, YouTube.
@@ -89,7 +89,7 @@ class DownloaderUI:
             width=28,
         )
 
-        self.cookie_btn = ttk.Button(self.frm, text='Import Cookies…', command=self.import_cookies)
+        self.cookie_btn = ttk.Button(self.frm, text='Import Cookies...', command=self.import_cookies)
 
         self.drive_method_label.grid(row=4, column=0, sticky='e', pady=(0, 5), padx=(0, 5))
         self.drive_method.grid(row=4, column=1, sticky='w', pady=(0, 5), padx=(0, 5))
@@ -174,29 +174,34 @@ class DownloaderUI:
                 logging.warning('Instagram authenticated client not acquired; aborting download')
                 return
 
+        # Capture the selections now: the worker thread must not read Tk
+        # variables, and changing the dropdowns mid-run must not reroute the
+        # remaining URLs to a different handler.
+        source = self.source_var.get()
+        drive_method = self.method_var.get()
+        insta_mode = self.insta_method_var.get()
+
         self.download_btn.state(['disabled'])
         threading.Thread(
             target=self._download_with_core,
-            args=(downloader, urls, instaloader_client),
+            args=(downloader, urls, source, drive_method, insta_mode, instaloader_client),
             daemon=True,
         ).start()
 
-    def _download_with_core(self, downloader, urls, instaloader_client=None):
+    def _download_with_core(self, downloader, urls, source, drive_method, insta_mode, instaloader_client=None):
         errors = []
         for url in urls:
-            source = self.source_var.get()
             opts = {}
 
             if source == 'Google Drive':
-                opts['method'] = 'public' if self.method_var.get().startswith('Public') else 'authenticated'
+                opts['method'] = 'public' if drive_method.startswith('Public') else 'authenticated'
 
             if source == 'Instagram':
-                mode = self.insta_method_var.get()
-                if mode.startswith('Authenticated'):
+                if insta_mode.startswith('Authenticated'):
                     opts['auth'] = 'authenticated'
                     if instaloader_client:
                         opts['instaloader_client'] = instaloader_client
-                elif mode.startswith('Auto'):
+                elif insta_mode.startswith('Auto'):
                     opts['auth'] = 'auto'
                 else:
                     opts['auth'] = 'unauthenticated'

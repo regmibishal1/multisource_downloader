@@ -1,4 +1,4 @@
-﻿"""Instagram handler using Instaloader with local session persistence."""
+"""Instagram handler using Instaloader with local session persistence."""
 from __future__ import annotations
 
 import logging

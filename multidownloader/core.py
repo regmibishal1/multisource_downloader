@@ -1,4 +1,4 @@
-﻿"""Core dispatcher for the multidownloader package.
+"""Core dispatcher for the multidownloader package.
 
 Provides a Downloader class that delegates to source-specific handlers.
 """

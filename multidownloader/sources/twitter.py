@@ -1,4 +1,4 @@
-﻿"""Twitter/X handler via yt-dlp."""
+"""Twitter/X handler via yt-dlp."""
 from __future__ import annotations
 
 from .yt_dlp_base import YtDlpHandler
