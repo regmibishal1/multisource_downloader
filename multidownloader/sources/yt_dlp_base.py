@@ -1,4 +1,4 @@
-﻿"""Shared yt-dlp handler utilities."""
+"""Shared yt-dlp handler utilities."""
 from __future__ import annotations
 
 import logging
@@ -57,9 +57,13 @@ class YtDlpHandler:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
                 self.logger.info('yt-dlp download complete: %s', url)
-                if cookie_path and save_cookies_to_file:
+                if cookie_path:
                     try:
-                        save_cookies_to_file(ydl.cookiejar, str(cookie_path), ignore_discard=True, ignore_expires=True)
+                        if save_cookies_to_file:
+                            save_cookies_to_file(ydl.cookiejar, str(cookie_path), ignore_discard=True, ignore_expires=True)
+                        else:
+                            # newer yt-dlp builds drop the helper; the jar can save itself
+                            ydl.cookiejar.save(str(cookie_path), ignore_discard=True, ignore_expires=True)
                         self.logger.debug('Updated cookies saved to %s', cookie_path)
                     except Exception as exc:  # pragma: no cover - best effort
                         self.logger.warning('Failed to persist cookies for %s: %s', self.source_key, exc)
