@@ -10,12 +10,14 @@ from .sources.threads import ThreadsHandler
 from .sources.tiktok import TikTokHandler
 from .sources.twitter import TwitterHandler
 from .sources.youtube import YouTubeHandler
+from . import platforms, signins
 
 
 class Downloader:
     def __init__(self, out_dir, logger=None):
         self.out_dir = out_dir
         self.logger = logger
+        self._refreshed = set()
         self.handlers = {
             'Google Drive': GoogleDriveHandler(logger=logger),
             'Instagram': InstagramHandler(logger=logger),
@@ -35,7 +37,18 @@ class Downloader:
         if source_name not in self.handlers:
             raise ValueError(f'Unknown source: {source_name}')
         handler = self.handlers[source_name]
-        return handler.download(url, self.out_dir, options or {})
+        if source_name not in self._refreshed:
+            # browser sign-ins are re-read once per run, so the browser's
+            # current cookies are used without exporting anything again
+            self._refreshed.add(source_name)
+            signins.refresh_from_browser(platforms.BY_HANDLER[source_name])
+        try:
+            result = handler.download(url, self.out_dir, options or {})
+        except Exception as exc:
+            signins.record_result(source_name, False, str(exc))
+            raise
+        signins.record_result(source_name, True)
+        return result
 
     def authenticate(self, source_name, root=None):
         """Proxy to handler interactive authentication if available.

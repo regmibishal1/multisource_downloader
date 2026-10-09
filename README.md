@@ -52,10 +52,33 @@ UI notes
 --------
 
 - Files are saved to `Downloads\Multisource` in your home folder unless you choose another folder.
-- Select any supported source from the dropdown. Additional options appear when a source needs them (e.g., Google Drive public vs authenticated, Instagram auth mode, cookie import button for yt-dlp sources).
-- Instagram "Auto" mode silently reuses the cached session in `multidownloader/.sessions/instagram/`. Use "Authenticated (prompt now)" the first time to sign in and save the session.
-- For yt-dlp backed platforms (TikTok, Threads, Twitter/X, Reddit, Facebook, YouTube) you can import a browser `cookies.txt` once; the UI copies it into `multidownloader/.sessions/<source>/cookies.txt` for reuse. Downloads only use cookies once you have imported a file. Older versions created this file automatically after any download, so if you never imported cookies but the file exists, delete it.
-- Google Drive authenticated downloads reuse cached PyDrive2 credentials stored in `multidownloader/.sessions/googledrive/credentials.json`. Keep your `client_secrets.json` in the project root or copy it into `multidownloader/.sessions/googledrive/` so the handler can locate it during the auth flow.
+- Select any supported source from the dropdown. Google Drive also shows a public or authenticated method.
+- Public posts download without signing in. When a download needs a sign-in, the app offers to set one up after the run, and **Sign-ins** (top right) shows every platform's status.
+
+Sign-ins
+--------
+
+Most platforms' terms do not allow automated downloading. This app is meant for preserving public-interest evidence and your own content. You are responsible for how you use it. If you plan to use files in legal proceedings, ask a lawyer.
+
+Before the first sign-in for a platform, the app shows what that platform's terms say and asks you to confirm. Facebook allows one account per person, in your real name, so do not create another Facebook account for this app. On other platforms, if you sign in at all, use an account you can afford to lose.
+
+Ways to sign in, per platform:
+- **Use my Firefox sign-in**: the app reads the platform's cookies from Firefox, where you are already signed in. Nothing is exported, and the app re-reads Firefox at the start of every run. Chrome, Edge and other Chromium browsers lock their sign-ins on Windows, so use Firefox or a cookies file there.
+- **Import a cookies file**: choose or paste a `cookies.txt` exported with the "Get cookies.txt LOCALLY" extension (Chrome, Edge) or "cookies.txt" (Firefox). Do not use the extension named just "Get cookies.txt". The app keeps only the platform's own cookies, so you can delete the original export afterwards.
+- **Username and password** (Instagram only, under "More ways to sign in"): not recommended, because Instagram is more likely to lock accounts that sign in from scripts.
+
+From the command line:
+
+```powershell
+.\penv\Scripts\python.exe -m multidownloader.signin_cli status
+.\penv\Scripts\python.exe -m multidownloader.signin_cli import instagram --browser firefox
+.\penv\Scripts\python.exe -m multidownloader.signin_cli import x --cookies C:\path\to\cookies.txt
+.\penv\Scripts\python.exe -m multidownloader.signin_cli remove --all
+```
+
+`import` shows the terms notice and asks you to type `yes`; pass `--accept-terms` when running without a terminal.
+
+Google Drive authenticated downloads still use the PyDrive2 setup: cached credentials in `multidownloader/.sessions/googledrive/credentials.json`, and your `client_secrets.json` in the project root or in that folder.
 
 Batch CLI (loot_report_scraper integration)
 ------------------------------------------
@@ -76,12 +99,12 @@ Options:
 Sessions and credential storage
 -------------------------------
 
-All reusable auth artifacts live under `multidownloader/.sessions/` (already ignored by git). Folder names are the source name in lower case, with spaces and other symbols replaced by `_`:
-- `instagram/`: saved Instaloader `.session` files and metadata.
-- `googledrive/credentials.json`: PyDrive2 credential cache.
-- `<source>/cookies.txt` (for example `twitter/`, `youtube/`): browser-exported cookies for yt-dlp handlers.
+All sign-ins live under `multidownloader/.sessions/` (already ignored by git), one folder per platform (`instagram/`, `twitter/`, `youtube/`, `googledrive/`, ...):
+- `cookies.txt`: the platform's cookies only, in Netscape format. yt-dlp and Instaloader both read it.
+- `signin.json`: how you signed in, the account id, when the sign-in expires, and which version of the platform's terms notice you accepted.
+- `instagram/*.session` and `googledrive/credentials.json`: Instaloader sessions and PyDrive2 tokens.
 
-The helpers in `multidownloader.session_store` read/write these files and are used by the handlers automatically.
+Older versions created `cookies.txt` automatically after any download. A file without a sign-in in it is now ignored, so you do not need to delete it. **Remove** in Sign-ins deletes a platform's files; **Remove all sign-ins** deletes them for every platform (your `client_secrets.json` is kept).
 
 Testing
 -------

@@ -192,8 +192,14 @@ class YtDlpCookieTests(TempSessionRoot):
         self.assertIsNone(handler._resolve_cookie_path({'use_session': True}))
         self.assertNotIn('cookiefile', handler._build_opts(str(self.tmp), {}, None))
 
+        # a file with only visitor cookies is not a sign-in either
         cookie_path = session_store.default_cookie_path('Twitter')
-        cookie_path.write_text('# Netscape HTTP Cookie File\n', encoding='utf-8')
+        cookie_path.write_text('# Netscape HTTP Cookie File\n.x.com\tTRUE\t/\tTRUE\t0\tguest_id\tv1\n',
+                               encoding='utf-8')
+        self.assertIsNone(handler._resolve_cookie_path({'use_session': True}))
+
+        cookie_path.write_text('# Netscape HTTP Cookie File\n.x.com\tTRUE\t/\tTRUE\t0\tauth_token\tabc\n',
+                               encoding='utf-8')
         self.assertEqual(cookie_path, handler._resolve_cookie_path({'use_session': True}))
         self.assertIsNone(handler._resolve_cookie_path({'use_session': False}))
 
