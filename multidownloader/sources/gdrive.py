@@ -24,6 +24,7 @@ except Exception:  # pragma: no cover - optional dependency
     PYDRIVE2_AVAILABLE = False
 
 from .. import session_store
+from ..paths import path_inside
 
 SESSION_NAMESPACE = 'GoogleDrive'
 CREDENTIAL_FILENAME = 'credentials.json'
@@ -36,15 +37,24 @@ CLIENT_SECRET_CANDIDATES = (
 
 
 def parse_drive_id(url):
-    m = re.search(r"(?:/d/|id=)([\w-]+)", url)
-    if m:
-        return m.group(1), 'file'
-    m = re.search(r"(?:folders/|folderview\?id=)([\w-]+)", url)
+    """Return (id, kind) where kind is 'file', 'folder' or 'unknown'.
+
+    Folder patterns are checked first: a generic "id=" match would otherwise
+    claim folderview?id= links. open?id= links can point at either, so they
+    come back as 'unknown'.
+    """
+    m = re.search(r"(?:/folders/|folderview\?id=)([\w-]+)", url)
     if m:
         return m.group(1), 'folder'
-    m = re.search(r"uc\?id=([\w-]+)", url)
+    m = re.search(r"/d/([\w-]+)", url)
     if m:
         return m.group(1), 'file'
+    m = re.search(r"(?:uc|download)\?(?:[^#]*&)?id=([\w-]+)", url)
+    if m:
+        return m.group(1), 'file'
+    m = re.search(r"[?&]id=([\w-]+)", url)
+    if m:
+        return m.group(1), 'unknown'
     return None, None
 
 
@@ -68,10 +78,27 @@ class GoogleDriveHandler:
         if not fid:
             raise ValueError('Invalid Google Drive URL')
 
+        public = options.get('method', 'public').startswith('public')
         if typ == 'file':
-            if options.get('method', 'public').startswith('public'):
+            if public:
                 return self._download_public_file(url, out_dir)
             return self._download_authenticated_file(fid, out_dir)
+
+        if typ == 'unknown':
+            # open?id= does not say whether it is a file or a folder: try the
+            # file path first, then the folder path.
+            try:
+                if public:
+                    return self._download_public_file(url, out_dir)
+                return self._download_authenticated_file(fid, out_dir)
+            except Exception as file_exc:
+                self.logger.info('Not a downloadable file, trying as a folder: %s (%s)', fid, file_exc)
+                try:
+                    return self._download_folder(fid, out_dir)
+                except Exception as folder_exc:
+                    raise RuntimeError(
+                        f'Could not download {url} as a file ({file_exc}) or a folder ({folder_exc})'
+                    ) from folder_exc
 
         return self._download_folder(fid, out_dir)
 
@@ -83,10 +110,12 @@ class GoogleDriveHandler:
         try:
             # fuzzy lets gdown pull the file id out of any drive URL shape,
             # including the common /file/d/<id>/view share links
-            gdown.download(url, output=os.path.join(out_dir, ''), quiet=False, fuzzy=True)
-            return True
+            result = gdown.download(url, output=os.path.join(out_dir, ''), quiet=False, fuzzy=True)
         except Exception as exc:  # pragma: no cover - network call
             raise RuntimeError(f'gdown failed: {exc}')
+        if not result:
+            raise RuntimeError('gdown did not download a file')
+        return True
 
     def _download_authenticated_file(self, file_id: str, out_dir: str):
         if not PYDRIVE2_AVAILABLE:
@@ -95,7 +124,8 @@ class GoogleDriveHandler:
         file_obj = drive.CreateFile({'id': file_id})
         file_obj.FetchMetadata()
         name = file_obj.get('title') or file_obj.get('originalFilename') or file_id
-        target_path = os.path.join(out_dir, name)
+        # Drive titles can contain "/" or "../"; never trust them as a path.
+        target_path = str(path_inside(out_dir, name, fallback=file_id))
         attempts = 2
         for attempt in range(1, attempts + 1):
             try:

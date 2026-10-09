@@ -7,8 +7,6 @@ import re
 import shutil
 import time
 from pathlib import Path
-import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
 
 try:
     from instaloader import Instaloader, Post
@@ -19,6 +17,15 @@ except Exception:  # pragma: no cover - instaloader optional
     INSTALOADER_AVAILABLE = False
 
 from .. import session_store
+
+# Matches /p/, /reel/, /reels/ and /tv/ links, with or without a leading
+# /<username>/ segment (a common share format).
+SHORTCODE_RE = re.compile(r"instagram\.com/(?:[A-Za-z0-9_.]+/)?(?:p|reels?|tv)/([A-Za-z0-9_-]+)", re.IGNORECASE)
+
+
+def parse_shortcode(url):
+    match = SHORTCODE_RE.search(url.split('?')[0])
+    return match.group(1) if match else None
 
 
 class InstagramHandler:
@@ -33,6 +40,11 @@ class InstagramHandler:
     # Interactive authentication helpers
     def interactive_auth(self, root=None):
         """Open a Tk dialog to authenticate or load a saved session."""
+        # Tk is imported here, not at module level, so the batch CLI works on
+        # Python builds without Tkinter.
+        import tkinter as tk
+        from tkinter import filedialog, messagebox, ttk
+
         if not INSTALOADER_AVAILABLE:
             messagebox.showerror('Missing Dependency', 'Instaloader is required for Instagram authenticated downloads')
             self.logger.error('Instaloader not available for Instagram authentication')
@@ -154,15 +166,17 @@ class InstagramHandler:
         loader = self._ensure_loader(loader, auth_mode)
 
         os.makedirs(out_dir, exist_ok=True)
-        url_clean = url.split('?')[0]
-        match = re.search(r"instagram.com/(?:p|reel|tv)/([\w-]+)", url_clean)
-        if not match:
+        shortcode = parse_shortcode(url)
+        if not shortcode:
             raise ValueError('Invalid Instagram link')
-        shortcode = match.group(1)
 
-        cwd = os.getcwd()
+        # Point Instaloader at out_dir instead of changing the process working
+        # directory, which is not thread safe. Braces in the path are escaped
+        # because Instaloader treats the pattern as a format string.
+        escaped_dir = str(out_dir).replace('{', '{{').replace('}', '}}')
+        previous_pattern = loader.dirname_pattern
+        loader.dirname_pattern = os.path.join(escaped_dir, '{target}')
         try:
-            os.chdir(out_dir)
             attempts = 2
             for attempt in range(1, attempts + 1):
                 try:
@@ -180,11 +194,14 @@ class InstagramHandler:
                         continue
                     raise RuntimeError(f'Failed to download Instagram post {shortcode}: {message}')
         finally:
-            os.chdir(cwd)
+            loader.dirname_pattern = previous_pattern
 
     # ------------------------------------------------------------------
     def _prompt_2fa(self, parent):
         """Prompt for a 2FA code."""
+        import tkinter as tk
+        from tkinter import ttk
+
         dlg = tk.Toplevel(parent)
         dlg.title('Instagram 2FA')
         ttk.Label(dlg, text='Enter 2FA code:').pack(padx=16, pady=(16, 4))
@@ -256,4 +273,4 @@ class InstagramHandler:
             self.logger.warning('Failed to import Instagram session %s: %s', source_path, exc)
 
 
-__all__ = ['InstagramHandler']
+__all__ = ['InstagramHandler', 'parse_shortcode']
