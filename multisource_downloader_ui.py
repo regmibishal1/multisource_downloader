@@ -13,7 +13,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from multidownloader.core import Downloader
-from multidownloader import session_store
+from multidownloader import detect, session_store
 
 logging.basicConfig(
     level=logging.INFO,
@@ -60,7 +60,7 @@ class DownloaderUI:
         self.frm = ttk.Frame(self.root, padding=20)
         self.frm.pack(fill=tk.BOTH, expand=True)
 
-        ttk.Label(self.frm, text='Enter URLs (comma separated):', font=('Segoe UI', 10, 'bold')).grid(
+        ttk.Label(self.frm, text='Links (paste them, or any text that contains them):', font=('Segoe UI', 10, 'bold')).grid(
             row=0, column=0, columnspan=2, sticky='w', pady=(0, 5)
         )
         self.url_entry = ttk.Entry(self.frm, textvariable=self.urls_var, width=60)
@@ -155,11 +155,14 @@ class DownloaderUI:
             messagebox.showerror('Cookie Import Failed', str(exc), parent=self.root)
 
     def start_download(self):
-        urls = [u.strip() for u in self.urls_var.get().split(',') if u.strip()]
+        # Pull every link out of whatever was pasted (chat exports, reports,
+        # comma or space separated lists) and drop repeats of the same post.
+        urls, duplicates = detect.unique_urls(detect.extract_urls(self.urls_var.get()))
         if not urls:
-            messagebox.showerror('No URLs', 'Please enter one or more URLs', parent=self.root)
+            messagebox.showerror('No links', 'No links found. Paste one or more links.', parent=self.root)
             logging.warning('No URLs entered for download')
             return
+        logging.info(detect.summarize(urls, duplicates))
 
         out_dir = self.dir_var.get() or DEFAULT_OUTPUT_DIR
         os.makedirs(out_dir, exist_ok=True)

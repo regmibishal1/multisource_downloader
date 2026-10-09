@@ -8,69 +8,11 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
-from urllib.parse import urlparse
 
+from . import detect, platforms
 from .core import Downloader
 
-_log = logging.getLogger('multidownloader.batch')
-
-SUPPORTED_SOURCES = {
-    'Google Drive',
-    'Instagram',
-    'TikTok',
-    'Threads',
-    'Twitter',
-    'Reddit',
-    'Facebook',
-    'YouTube',
-}
-
-# Hostnames are matched exactly or as a dot-suffix (www.x.com matches x.com,
-# dropbox.com does not).
-HOST_MAP: Tuple[Tuple[str, str], ...] = (
-    ('drive.google.com', 'Google Drive'),
-    ('docs.google.com', 'Google Drive'),
-    ('googleusercontent.com', 'Google Drive'),
-    ('instagram.com', 'Instagram'),
-    ('instagr.am', 'Instagram'),
-    ('ddinstagram.com', 'Instagram'),
-    ('threads.net', 'Threads'),
-    ('threads.com', 'Threads'),
-    ('tiktok.com', 'TikTok'),
-    ('douyin.com', 'TikTok'),
-    ('twitter.com', 'Twitter'),
-    ('x.com', 'Twitter'),
-    ('fxtwitter.com', 'Twitter'),
-    ('vxtwitter.com', 'Twitter'),
-    ('fixupx.com', 'Twitter'),
-    ('fixvx.com', 'Twitter'),
-    ('reddit.com', 'Reddit'),
-    ('redd.it', 'Reddit'),
-    ('facebook.com', 'Facebook'),
-    ('fb.com', 'Facebook'),
-    ('fb.watch', 'Facebook'),
-    ('fbcdn.net', 'Facebook'),
-    ('youtube.com', 'YouTube'),
-    ('youtu.be', 'YouTube'),
-    ('youtube-nocookie.com', 'YouTube'),
-    ('youtubekids.com', 'YouTube'),
-)
-
-# Source hints come from the scraper's group names ("twitter", "Google Drive"),
-# not from URLs, so a substring match is fine here.
-HINT_ALIASES: Tuple[Tuple[str, str], ...] = (
-    ('googledrive', 'Google Drive'),
-    ('google drive', 'Google Drive'),
-    ('gdrive', 'Google Drive'),
-    ('instagram', 'Instagram'),
-    ('threads', 'Threads'),
-    ('tiktok', 'TikTok'),
-    ('douyin', 'TikTok'),
-    ('twitter', 'Twitter'),
-    ('reddit', 'Reddit'),
-    ('facebook', 'Facebook'),
-    ('youtube', 'YouTube'),
-)
+SUPPORTED_SOURCES = {p.handler for p in platforms.PLATFORMS}
 
 DEFAULT_OUTPUT_DIR = Path('downloads')
 
@@ -91,37 +33,18 @@ def detect_handler(source_hint: str, url: str) -> Optional[str]:
     The URL decides. The scraper's source hint is only used when the host is
     unknown (for example a shortened link).
     """
-    from_url = match_host(url)
-    from_hint = match_alias(source_hint)
-    if from_url:
-        if from_hint and from_hint != from_url:
-            _log.warning('Source hint %r disagrees with URL %s; using %s', source_hint, url, from_url)
-        return from_url
-    return from_hint
+    platform = detect.detect_platform(url, source_hint)
+    return platform.handler if platform else None
 
 
 def match_host(url: str) -> Optional[str]:
-    try:
-        host = (urlparse(url).hostname or '').lower().rstrip('.')
-    except ValueError:
-        return None
-    if not host:
-        return None
-    for domain, handler in HOST_MAP:
-        if host == domain or host.endswith('.' + domain):
-            return handler
-    return None
+    platform = detect.platform_for_url(url)
+    return platform.handler if platform else None
 
 
 def match_alias(value: str) -> Optional[str]:
-    value = (value or '').strip().lower()
-    if '.' in value and ' ' not in value:
-        # domain-shaped hint such as "x.com": match it like a host
-        return match_host(value if '//' in value else 'https://' + value)
-    for alias, handler in HINT_ALIASES:
-        if alias in value:
-            return handler
-    return None
+    platform = detect.platform_for_hint(value)
+    return platform.handler if platform else None
 
 
 def load_manifest(path: Path, fmt: Optional[str] = None) -> List[ManifestItem]:
@@ -189,8 +112,16 @@ def execute_batch(
     completed: List[Tuple[str, str]] = []
     skipped: List[Tuple[str, str, str]] = []
     errors: List[Tuple[str, str, str]] = []
+    seen = set()
 
     for item in items:
+        # the same post shared in different link formats is downloaded once
+        key = detect.normalize_url(item.url)
+        if key in seen:
+            skipped.append((item.source_hint, item.url, 'duplicate'))
+            continue
+        seen.add(key)
+
         handler = detect_handler(item.source_hint, item.url)
         if not handler or handler not in SUPPORTED_SOURCES:
             skipped.append((item.source_hint, item.url, 'unsupported'))
@@ -255,6 +186,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     logger = logging.getLogger('multidownloader.batch')
 
     manifest = load_manifest(args.input, fmt=args.format)
+    unique, duplicates = detect.unique_urls(item.url for item in manifest)
+    logger.info(detect.summarize(unique, duplicates))
     result = execute_batch(
         manifest,
         args.out_dir,
@@ -270,7 +203,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         logger.error('Some downloads failed. See log for details.')
         return 1
     unsupported = sum(1 for *_rest, reason in result['skipped'] if reason == 'unsupported')
-    if result['attempted'] == 0 and unsupported == len(result['skipped']):
+    not_attempted = sum(1 for *_rest, reason in result['skipped'] if reason in ('unsupported', 'duplicate'))
+    if result['attempted'] == 0 and not_attempted == len(result['skipped']):
         logger.error('Nothing was attempted: %s link(s) are from unsupported sites.', unsupported)
         return 2
     return 0
