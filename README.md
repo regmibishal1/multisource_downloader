@@ -46,7 +46,7 @@ UI notes
 - Files are saved to `Downloads\Multisource` in your home folder unless you choose another folder.
 - Select any supported source from the dropdown. Additional options appear when a source needs them (e.g., Google Drive public vs authenticated, Instagram auth mode, cookie import button for yt-dlp sources).
 - Instagram "Auto" mode silently reuses the cached session in `multidownloader/.sessions/instagram/`. Use "Authenticated (prompt now)" the first time to sign in and save the session.
-- For yt-dlp backed platforms (TikTok, Threads, Twitter/X, Reddit, Facebook, YouTube) you can import a browser `cookies.txt` once; the UI copies it into `multidownloader/.sessions/<source>/cookies.txt` for reuse. Downloads only use cookies once you have imported a file.
+- For yt-dlp backed platforms (TikTok, Threads, Twitter/X, Reddit, Facebook, YouTube) you can import a browser `cookies.txt` once; the UI copies it into `multidownloader/.sessions/<source>/cookies.txt` for reuse. Downloads only use cookies once you have imported a file. Older versions created this file automatically after any download, so if you never imported cookies but the file exists, delete it.
 - Google Drive authenticated downloads reuse cached PyDrive2 credentials stored in `multidownloader/.sessions/googledrive/credentials.json`. Keep your `client_secrets.json` in the project root or copy it into `multidownloader/.sessions/googledrive/` so the handler can locate it during the auth flow.
 
 Batch CLI (loot_report_scraper integration)

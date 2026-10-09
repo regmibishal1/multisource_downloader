@@ -24,9 +24,7 @@ def _cookie_store_path():
     next to __file__ is lost on every restart. Use the per-user data folder.
     """
     base = os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"), ".local", "share")
-    folder = os.path.join(base, "multisource-downloader", "portable")
-    os.makedirs(folder, exist_ok=True)
-    return os.path.join(folder, "cookies.txt")
+    return os.path.join(base, "multisource-downloader", "portable", "cookies.txt")
 
 
 def _legacy_cookie_paths():
@@ -175,6 +173,7 @@ class SimpleDownloaderUI:
         if path:
             try:
                 dest = _cookie_store_path()
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
                 shutil.copy2(path, dest)
                 self.cookie_file = dest
                 self.cookie_status_var.set("cookies.txt imported")
