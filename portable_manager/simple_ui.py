@@ -224,7 +224,9 @@ class SimpleDownloaderUI:
             else:
                 self.root.after(0, lambda: self._on_error(result['error']))
         except Exception as e:
-            self.root.after(0, lambda: self._on_error(str(e)))
+            # bind the message now: Python deletes `e` when the except block ends,
+            # so a lambda that reads it later would raise NameError instead
+            self.root.after(0, lambda msg=str(e): self._on_error(msg))
 
     def _on_success(self, title):
         """Handle successful download completion."""

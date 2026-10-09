@@ -15,12 +15,6 @@ from tkinter import filedialog, messagebox, ttk
 from multidownloader.core import Downloader
 from multidownloader import detect, session_store
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s %(levelname)s %(message)s',
-    handlers=[logging.FileHandler('downloader.log', encoding='utf-8'), logging.StreamHandler()]
-)
-
 SOURCE_CHOICES = [
     'Google Drive',
     'Instagram',
@@ -234,7 +228,32 @@ class DownloaderUI:
         self.root.after(0, self.download_btn.state, ['!disabled'])
 
 
-if __name__ == '__main__':
+def _setup_logging():
+    """Log to downloader.log in the current folder, as before.
+
+    An installed launcher can start in a folder the user cannot write to (for
+    example Program Files), so fall back to the per-user data folder.
+    """
+    try:
+        file_handler = logging.FileHandler('downloader.log', encoding='utf-8')
+    except OSError:
+        base = os.environ.get('LOCALAPPDATA') or os.path.join(os.path.expanduser('~'), '.local', 'share')
+        folder = os.path.join(base, 'multisource-downloader')
+        os.makedirs(folder, exist_ok=True)
+        file_handler = logging.FileHandler(os.path.join(folder, 'downloader.log'), encoding='utf-8')
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s %(levelname)s %(message)s',
+        handlers=[file_handler, logging.StreamHandler()],
+    )
+
+
+def main():
+    _setup_logging()
     root = tk.Tk()
-    app = DownloaderUI(root)
+    DownloaderUI(root)
     root.mainloop()
+
+
+if __name__ == '__main__':
+    main()

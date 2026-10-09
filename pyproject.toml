@@ -1,0 +1,55 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "multisource-downloader"
+dynamic = ["version"]
+description = "Download media and metadata from links on YouTube, X, Instagram, TikTok, Threads, Facebook, Reddit and Google Drive."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+dependencies = [
+    # 2025.11.12 and later support YouTube's JavaScript challenges; the
+    # [default] extra brings yt-dlp-ejs, which they need.
+    "yt-dlp[default]>=2025.11.12",
+]
+
+[project.optional-dependencies]
+instagram = ["instaloader>=4.11"]
+# gdown 6 removed the fuzzy= argument the Drive handler passes.
+drive = ["gdown>=5,<6", "PyDrive2>=1.20"]
+all = ["multisource-downloader[instagram,drive]"]
+dev = ["ruff>=0.6"]
+
+[project.scripts]
+multidownloader-batch = "multidownloader.batch:main"
+
+[project.gui-scripts]
+multisource-downloader = "multisource_downloader_ui:main"
+
+[project.urls]
+Source = "https://github.com/regmibishal1/multisource_downloader"
+Issues = "https://github.com/regmibishal1/multisource_downloader/issues"
+
+[tool.hatch.version]
+path = "multidownloader/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["multidownloader"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"multisource_downloader_ui.py" = "multisource_downloader_ui.py"
+
+[tool.hatch.build.targets.sdist]
+exclude = ["penv", "portable_manager/build", "portable_manager/dist"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+extend-exclude = ["penv"]
+
+[tool.ruff.lint]
+# pyflakes plus pycodestyle errors; style rules can be tightened later
+select = ["E4", "E7", "E9", "F"]
