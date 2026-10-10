@@ -48,6 +48,7 @@ _TEMP_SUFFIXES = ('.part', '.ytdl', '.tmp', '.temp')
 BACKENDS = {
     'Instagram': 'instaloader',
     'Google Drive': 'gdown',
+    'Bluesky': 'gallery-dl',
 }
 
 CSV_FIELDS = (
@@ -182,6 +183,18 @@ def post_from_metadata(path: Path) -> Optional[Dict]:
         caption = ((captions[0] or {}).get('node') or {}).get('text') if captions else None
         return {'id': node.get('shortcode'), 'uploader': (node.get('owner') or {}).get('username'),
                 'posted_at': _iso_from_ts(node.get('taken_at_timestamp')), 'title': caption}
+    if 'category' in data and 'subcategory' in data:  # gallery-dl
+        author = data.get('author') if isinstance(data.get('author'), dict) else {}
+        user = data.get('user') if isinstance(data.get('user'), dict) else {}
+        uploader = (author.get('name') or author.get('handle') or author.get('uniqueId') or user.get('name')
+                    or data.get('username') or (data.get('author') if isinstance(data.get('author'), str) else None))
+        posted = data.get('date') or data.get('post_date')
+        if isinstance(posted, str) and len(posted) >= 19 and posted[10] == ' ':
+            posted = posted[:10] + 'T' + posted[11:19] + 'Z'  # gallery-dl writes UTC "YYYY-MM-DD HH:MM:SS"
+        text = data.get('content') or data.get('text') or data.get('description') or data.get('title')
+        return {'id': str(data.get('tweet_id') or data.get('post_shortcode') or data.get('post_id') or
+                          data.get('shortcode') or data.get('id') or '') or None,
+                'uploader': uploader, 'posted_at': posted if isinstance(posted, str) else None, 'title': text}
     if path.name.endswith('.drive.json'):
         return {'id': data.get('id'), 'uploader': ', '.join(data.get('owners') or []) or None,
                 'posted_at': data.get('modified'), 'title': data.get('name')}
@@ -307,7 +320,11 @@ class Run:
         stage = self.root / STAGING_DIRNAME / f'{self.run_id}_{job_number:04d}'
         stage.mkdir(parents=True, exist_ok=True)
         try:
-            downloader.download(handler, url, options or {}, out_dir=str(stage))
+            outcome = downloader.download(handler, url, options or {}, out_dir=str(stage))
+            if isinstance(outcome, dict) and outcome.get('backend'):
+                # another backend did the work (gallery-dl for image posts)
+                result.backend = outcome['backend']
+                result.backend_version = backend_version(result.backend)
             files = self._collect(stage)
             if not files:
                 result.status = 'failed'
@@ -345,7 +362,8 @@ class Run:
         """Fill metadata_path and post from the metadata file the backend wrote, if any."""
         for f in result.files:
             name = f.path.rsplit('/', 1)[-1]
-            if name.endswith(('.info.json', '.drive.json')) or (name.endswith('.json') and result.backend == 'instaloader'):
+            if name.endswith(('.info.json', '.drive.json')) or (
+                name.endswith('.json') and result.backend in ('instaloader', 'gallery-dl')):
                 post = post_from_metadata(self.root / f.path)
                 if post:
                     # the folder date is the post's when known, else the download date

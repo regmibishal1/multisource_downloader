@@ -42,6 +42,7 @@ _POST_PATTERNS = {
     'threads': re.compile(r'/post/([A-Za-z0-9_-]+)'),
     'gdrive': re.compile(r'(?:/d/|/folders/|[?&]id=)([\w-]+)'),
     'facebook': re.compile(r'/(?:videos|reel|posts)/(\d+)'),
+    'bluesky': re.compile(r'/post/([a-z0-9]+)'),
 }
 
 

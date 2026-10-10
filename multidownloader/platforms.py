@@ -46,6 +46,9 @@ class Platform:
     # Hosts the sign-in window may show without an "Unexpected page" warning,
     # besides cookie_domains (for example Threads signs in through Instagram).
     web_signin_hosts: Tuple[str, ...] = ()
+    # Download backends in the order they are tried (brief T3). "gallery-dl"
+    # after "yt-dlp" means: if yt-dlp finds no video, get the images.
+    backends: Tuple[str, ...] = ('yt-dlp',)
 
     def expected_signin_host(self, host: str) -> bool:
         host = (host or '').lower()
@@ -72,6 +75,7 @@ PLATFORMS: Tuple[Platform, ...] = (
              account_cookie='twid',
              signin_need='often',
              web_signin_url='https://x.com/i/flow/login',
+             backends=('yt-dlp', 'gallery-dl'),
              terms=Terms('2026-10-09', 'https://x.com/en/tos',
                          "X's terms do not allow scraping without written permission. "
                          'Using your account here can get it restricted.',
@@ -85,6 +89,7 @@ PLATFORMS: Tuple[Platform, ...] = (
              signin_need='often',
              web_signin_url='https://www.instagram.com/accounts/login/',
              web_signin_hosts=('facebook.com',),
+             backends=('instaloader', 'gallery-dl', 'yt-dlp'),
              terms=Terms('2025-01-01', 'https://help.instagram.com/581066165581870',
                          "Instagram's terms do not allow automated collection, including while signed in. "
                          'Using your account here can get it restricted or banned.',
@@ -106,6 +111,7 @@ PLATFORMS: Tuple[Platform, ...] = (
              cookie_domains=('tiktok.com',),
              markers=(('sessionid',),),
              web_signin_url='https://www.tiktok.com/login',
+             backends=('yt-dlp', 'gallery-dl'),
              terms=Terms('2026-07', 'https://www.tiktok.com/legal/page/us/terms-of-service/en',
                          "TikTok's terms allow downloading only through TikTok's own features or with written "
                          'approval. Using your account here can get it restricted.',
@@ -118,6 +124,7 @@ PLATFORMS: Tuple[Platform, ...] = (
              account_cookie='c_user',
              signin_need='often',
              web_signin_url='https://www.facebook.com/login/',
+             backends=('yt-dlp', 'gallery-dl'),
              terms=Terms('2025-01-01', 'https://www.facebook.com/terms.php',
                          "Facebook's terms do not allow automated data collection without permission, and allow "
                          'only one account per person, in your real name. Using your account here can get it '
@@ -129,6 +136,7 @@ PLATFORMS: Tuple[Platform, ...] = (
              cookie_domains=('reddit.com',),
              markers=(('reddit_session', 'token_v2'),),
              web_signin_url='https://www.reddit.com/login/',
+             backends=('yt-dlp', 'gallery-dl'),
              terms=Terms('2026-07-01', 'https://redditinc.com/policies/user-agreement',
                          "Reddit's terms do not allow scraping without written consent. "
                          'Using your account here can get it restricted.',
@@ -137,7 +145,15 @@ PLATFORMS: Tuple[Platform, ...] = (
              ('drive.google.com', 'docs.google.com', 'googleusercontent.com'),
              ('googledrive', 'google drive', 'gdrive'),
              cookie_domains=('google.com',),
-             markers=(('SID', '__Secure-1PSID'),)),
+             markers=(('SID', '__Secure-1PSID'),),
+             backends=('gdrive',)),
+    # Public posts on the open AT Protocol: no sign-in, and no terms clause
+    # against automated access was found (brief 0.11).
+    Platform('bluesky', 'Bluesky', 'Bluesky',
+             ('bsky.app',),
+             ('bluesky', 'bsky'),
+             signin_need='none',
+             backends=('gallery-dl', 'yt-dlp')),
 )
 
 BY_KEY = {p.key: p for p in PLATFORMS}

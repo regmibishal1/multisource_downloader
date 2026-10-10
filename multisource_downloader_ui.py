@@ -33,6 +33,7 @@ SOURCE_CHOICES = [
     'Reddit',
     'Facebook',
     'YouTube',
+    'Bluesky',
 ]
 
 # Shown in the folder field from the start so files never land in whatever

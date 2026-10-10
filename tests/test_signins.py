@@ -146,7 +146,7 @@ class MarkerTests(unittest.TestCase):
         self.assertIsNone(signins.account_id(YT, self.cookies(line('.youtube.com', 'SID'))))
 
     def test_every_platform_has_markers_and_cookie_domains(self):
-        for platform in PLATFORMS:
+        for platform in [p for p in PLATFORMS if p.signin_need != 'none']:
             with self.subTest(platform=platform.key):
                 self.assertTrue(platform.markers)
                 self.assertTrue(platform.cookie_domains)

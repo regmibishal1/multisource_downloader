@@ -569,7 +569,7 @@ def status(key_or_platform, now: Optional[float] = None) -> Status:
         if legacy_user:
             return Status(platform, 'ready', f'Signed in as {legacy_user} via saved session', '✓', 'success',
                           'password', None)
-        if platform.signin_need == 'optional':
+        if platform.signin_need in ('optional', 'none'):
             return Status(platform, 'not_needed', 'Not needed for public posts', '', 'text-2')
         return Status(platform, 'not_set_up', 'Not set up', '', 'text-2')
 
