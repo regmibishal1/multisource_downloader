@@ -27,6 +27,8 @@ Change log
 
 ### 2026-10-10
 
+- Security updates from Dependabot alerts: `urllib3` 2.5.0 to 2.8.0, `requests` 2.32.4 to 2.34.2, `httplib2` 0.31.0 to 0.32.0, `idna` 3.10 to 3.20, `pyasn1` 0.6.1 to 0.6.4, `protobuf` 6.32.1 to 6.33.6 (the Google libraries need protobuf below 7), `soupsieve` 2.8 to 2.9, `filelock` 3.19.1 to 3.32.7 (kept on 3.x), `setuptools` 80.10.2 to 83.0.0, and pip itself to 26.2.1 in `penv`.
+- Not updated: `cryptography` stays at 43.0.3 and `pyOpenSSL` at 24.2.1, although alerts ask for 49 and 26. PyDrive2 1.21.3, the newest release, requires `cryptography<44` and `pyOpenSSL<=24.2.1`, so pip cannot install the fixed versions next to it (CI and the Windows app install from pyproject.toml). The app uses them only through PyDrive2 for "Connect with your own Google Cloud project"; downloads use Python's own TLS, not pyOpenSSL.
 - Added the rest of yt-dlp's `default` extra to `penv`: `brotli` 1.2.0, `mutagen` 1.48.1, `pycryptodomex` 3.24.0 and `websockets` 17.2 (yt-dlp itself unchanged at 2026.8.19). Some sites need websockets (live streams) or pycryptodomex (encrypted streams); `pip install ".[all]"` and the Windows app already had them.
 - Added `gallery-dl` 1.32.16 for image posts (photo-only X posts, carousels, Reddit, TikTok and Facebook photos) and Bluesky. It is GPL-2.0-only, so the app runs it as a separate program and never imports it.
 
