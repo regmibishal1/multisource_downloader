@@ -53,6 +53,25 @@ class PlatformTableTests(unittest.TestCase):
             with self.subTest(key=key):
                 self.assertTrue(BY_KEY[key].web_signin_url.startswith('https://'))
 
+    def test_logged_out_cookies_are_not_a_signin(self):
+        # cookie names the live sites set for a logged-out visitor, recorded
+        # on 2026-10-09 by loading each sign-in or home page without signing in
+        anonymous = {
+            'reddit': ['edgebucket'],
+            'tiktok': ['msToken', 'tiktok_webapp_theme', 'tiktok_webapp_theme_source', 'tt_chain_token',
+                       'tt_csrf_token', 'ttwid'],
+            'instagram': ['csrftoken', 'datr', 'dpr', 'ig_did', 'mid', 'wd'],
+            'x': ['__cf_bm', '__cuid', 'g_state', 'gt', 'guest_id', 'guest_id_ads', 'guest_id_marketing',
+                  'personalization_id'],
+            'facebook': ['datr', 'dpr', 'fr', 'ps_l', 'ps_n', 'sb', 'wd'],
+            'threads': ['csrftoken', 'dpr', 'ig_did'],
+        }
+        for key, names in anonymous.items():
+            platform = BY_KEY[key]
+            items = [{'name': n, 'value': 'v', 'domain': '.' + platform.cookie_domains[0]} for n in names]
+            with self.subTest(key=key):
+                self.assertFalse(signins.find_markers(platform, signins.cookies_from_webview(items))[0])
+
     def test_expected_hosts(self):
         self.assertTrue(IG.expected_signin_host('www.instagram.com'))
         self.assertTrue(BY_KEY['threads'].expected_signin_host('www.instagram.com'))

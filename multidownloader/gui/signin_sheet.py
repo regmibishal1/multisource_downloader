@@ -258,6 +258,8 @@ class SignInSheet(tk.Toplevel):
         """Open the sign-in window in its own process and follow its progress."""
         import json as _json
 
+        self._webview_error = None
+        self._webview_cancelled = False
         fd, out = tempfile.mkstemp(prefix='.signin-', suffix='.json', dir=signins.folder(self.platform))
         os.close(fd)  # mkstemp makes it readable only by this user
         self._webview_out = out
@@ -354,6 +356,8 @@ class SignInSheet(tk.Toplevel):
         if not self._webview_done or not out:
             self._webview_cleanup()
             self._back_to_cards()
+            if getattr(self, '_webview_cancelled', False):
+                return  # the user chose Cancel or another way: not an error
             reason = getattr(self, '_webview_error', None)
             self._show_error(f'The sign-in window could not open: {reason}' if reason
                              else 'The sign-in window was closed or timed out. Select Continue to try again.')
@@ -384,15 +388,12 @@ class SignInSheet(tk.Toplevel):
                 os.unlink(out)
 
     def _cancel_webview(self):
-        proc = getattr(self, '_webview_proc', None)
-        if proc and proc.poll() is None:
-            proc.terminate()
-        else:
-            self._back_to_cards()
+        self._back_to_cards()
 
     def _back_to_cards(self):
         proc = getattr(self, '_webview_proc', None)
         if proc and proc.poll() is None:
+            self._webview_cancelled = True
             proc.terminate()  # the reader thread then reports exit
             return
         if getattr(self, 'companion', None) is not None and self.companion.winfo_exists():

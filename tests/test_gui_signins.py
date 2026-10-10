@@ -171,6 +171,22 @@ class SignInWindowTests(unittest.TestCase):
         self.assertIn('closed or timed out', sheet.message_var.get())
         sheet.destroy()
 
+    def test_cancel_is_not_an_error(self):
+        from multidownloader.gui.signin_sheet import SignInSheet
+        with mock.patch.object(signins, 'webview_available', return_value=(True, '')):
+            sheet = SignInSheet(self.root, BY_KEY['x'])
+        sheet._show_companion()
+        proc = mock.Mock()
+        proc.poll.return_value = None
+        sheet._webview_proc = proc
+        sheet._webview_done = False
+        sheet._webview_cancelled = False
+        sheet._cancel_webview()
+        proc.terminate.assert_called_once()
+        sheet._webview_finished()  # what the reader thread triggers after exit
+        self.assertEqual('', sheet.message_var.get())
+        sheet.destroy()
+
     def test_drive_sheet_offers_the_cloud_project(self):
         from multidownloader.gui.signin_sheet import SignInSheet
         sheet = SignInSheet(self.root, BY_KEY['gdrive'])
