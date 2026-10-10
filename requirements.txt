@@ -28,7 +28,7 @@ packaging==26.0
 proto-plus==1.26.1
 protobuf==6.32.1
 proxy_tools==0.1.0
-pyasn1==0.6.1
+pyasn1==0.6.4
 pyasn1_modules==0.4.2
 pycparser==2.23
 pycryptodomex==3.24.0
