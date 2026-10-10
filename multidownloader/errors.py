@@ -114,6 +114,9 @@ _OWN_MESSAGES: Tuple[Tuple[str, str, Optional[str]], ...] = (
     ('The download finished but no file was saved.', NO_MEDIA, None),
     ('Image posts from Threads are not supported yet.', UNSUPPORTED, COPY_LINK),
     ('gallery-dl is not installed.', MISSING_COMPONENT, HOW_TO_FIX),
+    ('yt-dlp is not installed.', MISSING_COMPONENT, HOW_TO_FIX),
+    ('Instaloader is not installed.', MISSING_COMPONENT, HOW_TO_FIX),
+    ('Google Drive downloads need gdown.', MISSING_COMPONENT, HOW_TO_FIX),
 )
 
 _TEXT_RULES: Tuple[Tuple[str, str], ...] = (

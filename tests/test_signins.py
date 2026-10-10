@@ -393,7 +393,7 @@ class DownloaderWiringTests(TempStore):
     def test_results_are_recorded_and_browser_refreshed_once(self):
         self.save(X, cookie_file(line('.x.com', 'auth_token')))
         downloader = Downloader(str(self.tmp))
-        handler = mock.Mock()
+        handler = mock.Mock(available=mock.Mock(return_value=(True, '')))
         handler.download.side_effect = [True, RuntimeError('ERROR: login required'), RuntimeError('HTTP 500')]
         downloader.handlers['Twitter'] = handler
         with mock.patch.object(signins, 'refresh_from_browser') as refresh:
@@ -435,7 +435,7 @@ class DownloaderWiringTests(TempStore):
 
     def test_no_signin_no_record(self):
         downloader = Downloader(str(self.tmp))
-        handler = mock.Mock()
+        handler = mock.Mock(available=mock.Mock(return_value=(True, '')))
         handler.download.side_effect = RuntimeError('login required')
         downloader.handlers['Twitter'] = handler
         with self.assertRaises(RuntimeError):

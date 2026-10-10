@@ -81,7 +81,7 @@ From the command line:
 .\penv\Scripts\python.exe -m multidownloader.signin_cli remove --all
 ```
 
-`import` shows the terms notice and asks you to type `yes`; pass `--accept-terms` when running without a terminal.
+`import` shows the terms notice and asks you to type `yes`; pass `--accept-terms` when running without a terminal. For Instagram only, `import instagram --password` signs in with your username and password in the terminal (asking for a security code if Instagram wants one); it is a last resort, for the same reasons as in the window.
 
 Google Drive: public links need nothing. For files shared with your Google account, use your Firefox sign-in or a google.com cookies file (needs gdown 6 or newer). The advanced alternative, **Connect with your own Google Cloud project**, walks through creating a free Desktop OAuth client and signs in through your normal browser. Google signs you out every 7 days while that project is in Testing status, and the app tells you when that happens. A `client_secrets.json` left in the project root by older versions is copied into the Google Drive sign-in folder.
 

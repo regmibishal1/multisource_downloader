@@ -20,6 +20,9 @@ from .. import session_store, signins
 from ..platforms import BY_KEY
 from ..signins import SignInError
 
+INSTAGRAM_PASSWORD_NOTE = ('Not recommended. Instagram is more likely to lock accounts that sign in from '
+                           'scripts, and its terms do not allow automated collection. Your password goes only to '
+                           'Instagram and is not saved.')
 CHECKPOINT_MESSAGE = ('Instagram wants you to confirm this sign-in. '
                       'Open Instagram in your browser, approve it, then try again.')
 
@@ -33,7 +36,13 @@ def parse_shortcode(url):
     return match.group(1) if match else None
 
 
+INSTALOADER_MISSING = 'Instaloader is not installed. Install it with: python -m pip install ".[instagram]"'
+
+
 class InstagramHandler:
+    """Instagram posts through Instaloader (a backends.base.Backend)."""
+
+    name = 'instaloader'
     SESSION_SOURCE = 'Instagram'
     META_FILENAME = 'meta.json'
 
@@ -41,6 +50,9 @@ class InstagramHandler:
         self.logger = logger or logging.getLogger(__name__)
         self._signin_loader = None
         session_store.ensure_session_dir(self.SESSION_SOURCE)
+
+    def available(self):
+        return (True, '') if INSTALOADER_AVAILABLE else (False, INSTALOADER_MISSING)
 
     # ------------------------------------------------------------------
     # Password sign-in (last resort; see signins.py for the other methods)
@@ -67,7 +79,7 @@ class InstagramHandler:
         to show the user.
         """
         if not INSTALOADER_AVAILABLE:
-            raise SignInError('Instagram sign-in needs the instagram extra: pip install ".[instagram]"')
+            raise SignInError(INSTALOADER_MISSING)
         from instaloader.exceptions import (
             BadCredentialsException,
             ConnectionException,
@@ -101,6 +113,18 @@ class InstagramHandler:
         self.logger.info('Instagram password sign-in worked for %s', username)
         return loader
 
+    def password_signin(self, auth, terms_version):
+        """Password sign-in that asks through an auth.AuthProvider; returns the SaveResult.
+
+        Raises SignInError when there is no one to ask or the sign-in fails.
+        """
+        creds = auth.request_credentials('Instagram', INSTAGRAM_PASSWORD_NOTE)
+        if creds is None:
+            raise SignInError('No username and password given. Use a browser sign-in instead: '
+                              'multidownloader-signin import instagram --browser firefox')
+        loader = self.password_login(creds.username, creds.password, lambda: auth.request_2fa_code('Instagram'))
+        return self.save_password_signin(loader, creds.username, terms_version)
+
     def save_password_signin(self, loader, username, terms_version):
         """Store the session's cookies in the shared sign-in store."""
         platform = BY_KEY['instagram']
@@ -114,7 +138,7 @@ class InstagramHandler:
     # ------------------------------------------------------------------
     def download(self, url, out_dir, options):
         if not INSTALOADER_AVAILABLE:
-            raise RuntimeError('Instaloader not available')
+            raise RuntimeError(INSTALOADER_MISSING)
 
         auth_mode = options.get('auth', 'auto')
         loader = options.get('instaloader_client') or options.get('instaloader')

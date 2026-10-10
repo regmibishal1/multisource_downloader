@@ -144,7 +144,7 @@ class FallbackTests(unittest.TestCase):
         self.downloader._refreshed.update(self.downloader.handlers)  # no browser refresh in tests
 
     def fail_with(self, handler, message):
-        fake = mock.Mock()
+        fake = mock.Mock(available=mock.Mock(return_value=(True, '')))
         fake.download.side_effect = RuntimeError(message)
         self.downloader.handlers[handler] = fake
 

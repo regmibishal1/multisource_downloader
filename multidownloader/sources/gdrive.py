@@ -139,7 +139,18 @@ def validate_client_secrets(text: str) -> None:
                           'app client from Google Cloud, Credentials.')
 
 
+GDOWN_MISSING = 'Google Drive downloads need gdown. Install it with: python -m pip install ".[drive]"'
+
+
 class GoogleDriveHandler:
+    """Google Drive files and folders (a backends.base.Backend)."""
+
+    name = 'gdown'
+
+    def available(self):
+        # gdown covers public links; PyDrive2 is only needed for the OAuth route
+        return (True, '') if GDOWN_AVAILABLE or PYDRIVE2_AVAILABLE else (False, GDOWN_MISSING)
+
     def __init__(self, logger=None):
         self.logger = logger or logging.getLogger(__name__)
         session_store.ensure_session_dir(SESSION_NAMESPACE)

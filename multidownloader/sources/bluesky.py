@@ -8,6 +8,15 @@ from .yt_dlp_base import YtDlpHandler
 
 
 class BlueskyHandler:
+    """Bluesky posts (a backends.base.Backend): gallery-dl, or yt-dlp without it."""
+
+    name = gallerydl.NAME
+
+    def available(self):
+        if gallerydl.available()[0] or self._ytdlp.available()[0]:
+            return True, ''
+        return False, gallerydl.NOT_INSTALLED
+
     def __init__(self, logger=None):
         self.logger = logger or logging.getLogger(__name__)
         self._ytdlp = YtDlpHandler('Bluesky', logger=self.logger)
