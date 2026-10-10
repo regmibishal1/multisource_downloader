@@ -840,7 +840,8 @@ class SignInsWindow(tk.Toplevel):
             actions = ttk.Frame(self.rows)
             actions.grid(row=r, column=3, sticky='e', pady=6)
             if st.platform.signin_need == 'none':
-                pass  # public posts only, nothing to sign in to
+                # public posts only: say so, so the row does not look like a missing button
+                _caption(actions, 'Nothing to sign in to').pack(side=tk.LEFT)
             elif st.state in ('not_needed', 'not_set_up'):
                 ttk.Button(actions, text='Sign in', command=lambda p=st.platform: self._sign_in(p)).pack(side=tk.LEFT)
             else:

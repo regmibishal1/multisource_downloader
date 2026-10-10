@@ -113,6 +113,7 @@ _OWN_MESSAGES: Tuple[Tuple[str, str, Optional[str]], ...] = (
     ('Google Drive sign-in needs gdown 6 or newer', MISSING_COMPONENT, HOW_TO_UPDATE),
     ('The download finished but no file was saved.', NO_MEDIA, None),
     ('Image posts from Threads are not supported yet.', UNSUPPORTED, COPY_LINK),
+    ('Threads posts cannot be downloaded yet', UNSUPPORTED, COPY_LINK),
     ('gallery-dl is not installed.', MISSING_COMPONENT, HOW_TO_FIX),
     ('yt-dlp is not installed.', MISSING_COMPONENT, HOW_TO_FIX),
     ('Instaloader is not installed.', MISSING_COMPONENT, HOW_TO_FIX),
@@ -127,7 +128,8 @@ _TEXT_RULES: Tuple[Tuple[str, str], ...] = (
     (r'invalid_grant', OAUTH_EXPIRED),
     (r'http error 429|too many requests|rate[- ]limit|toomanyrequests|please wait a few minutes|'
      r'too many users have viewed', RATE_LIMITED),
-    (r'available in your (country|region)|geo[- ]?restrict|blocked in your (country|region)', GEO_BLOCKED),
+    (r'available in your (country|region)|geo[- ]?restrict|blocked in your (country|region)|'
+     r'ip address is blocked from accessing', GEO_BLOCKED),
     (r'private video|this account is private|is private|privateprofilenotfollowed', PRIVATE),
     (r'login required|log in to|sign in to (confirm your age|view)|requires authentication|loginrequired|'
      r'not logged in|cookies? (are|is) (needed|required)|use --cookies', AUTH_REQUIRED),
@@ -143,6 +145,8 @@ _TEXT_RULES: Tuple[Tuple[str, str], ...] = (
      r'network is unreachable|temporary failure in name resolution|remote end closed|'
      r'connectionerror|ssl: |urlopen error', NETWORK),
     (r'http error 403', RATE_LIMITED),
+    # yt-dlp's own words when a site changed and the extractor no longer understands it
+    (r'please report this issue on|confirm you are on the latest version', OUTDATED),
 )
 
 _TYPE_RULES: Tuple[Tuple[str, str], ...] = (

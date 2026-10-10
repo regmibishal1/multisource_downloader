@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import shutil
 import sys
 import time
@@ -438,6 +439,28 @@ def firefox_profiles() -> List[BrowserProfile]:
                 name = entry.name.split('.', 1)[1] if '.' in entry.name else entry.name
                 found.append((db.stat().st_mtime, BrowserProfile(name, str(entry))))
     return [profile for _mtime, profile in sorted(found, key=lambda item: item[0], reverse=True)]
+
+
+_FIREFOX_OS = {'win32': 'Windows NT 10.0; Win64; x64', 'darwin': 'Macintosh; Intel Mac OS X 10.15'}
+
+
+def own_firefox_user_agent() -> Optional[str]:
+    """The User-Agent of the Firefox installed on this computer, from its newest profile's version.
+
+    Firefox's User-Agent is its version and the operating system (it no longer says which OS version), so
+    this is what the user's own browser sends. Used as is, the same every time; None without Firefox.
+    """
+    for profile in firefox_profiles():
+        try:
+            text = (Path(profile.path) / 'compatibility.ini').read_text(encoding='utf-8', errors='replace')
+        except OSError:
+            continue
+        match = re.search(r'^LastVersion=(\d+)\.', text, re.M)
+        if match:
+            system = _FIREFOX_OS.get(sys.platform, 'X11; Linux x86_64')
+            major = match.group(1)
+            return f'Mozilla/5.0 ({system}; rv:{major}.0) Gecko/20100101 Firefox/{major}.0'
+    return None
 
 
 def read_browser_cookies(browser: str, profile: Optional[str] = None) -> List[Cookie]:
