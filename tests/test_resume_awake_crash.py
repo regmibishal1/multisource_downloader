@@ -13,14 +13,10 @@ from multidownloader.runs import Run
 
 from test_runs import FakeDownloader
 
-try:
+from gui_gate import HAVE_DISPLAY, REASON as GUI_REASON
+
+if HAVE_DISPLAY:
     import tkinter as tk
-    _r = tk.Tk()
-    _r.withdraw()
-    _r.destroy()
-    HAVE_DISPLAY = True
-except Exception:
-    HAVE_DISPLAY = False
 
 
 class Interrupting(FakeDownloader):
@@ -163,7 +159,7 @@ class KeepAwakeTests(unittest.TestCase):
             self.assertTrue(held)
 
 
-@unittest.skipUnless(HAVE_DISPLAY, 'needs a display')
+@unittest.skipUnless(HAVE_DISPLAY, GUI_REASON)
 class CrashTests(unittest.TestCase):
     def setUp(self):
         self.root = tk.Tk()

@@ -7,14 +7,10 @@ from unittest import mock
 from multidownloader import session_store, signins
 from multidownloader.platforms import BY_KEY
 
-try:
+from gui_gate import HAVE_DISPLAY, REASON as GUI_REASON
+
+if HAVE_DISPLAY:
     import tkinter as tk
-    _root = tk.Tk()
-    _root.withdraw()
-    _root.destroy()
-    HAVE_DISPLAY = True
-except Exception:  # no Tk or no display (headless CI)
-    HAVE_DISPLAY = False
 
 
 def texts(widget):
@@ -30,7 +26,7 @@ def texts(widget):
     return found
 
 
-@unittest.skipUnless(HAVE_DISPLAY, 'needs a display')
+@unittest.skipUnless(HAVE_DISPLAY, GUI_REASON)
 class SignInWindowTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
