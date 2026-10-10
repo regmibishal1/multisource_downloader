@@ -12,6 +12,10 @@ Supported sources (install only the extras you need):
 - Reddit: `yt-dlp`
 - Facebook: `yt-dlp`
 - YouTube: `yt-dlp`
+- Bluesky: `gallery-dl` (public posts, no sign-in)
+- Image posts (photo-only X posts, Reddit, TikTok and Facebook photo posts): when yt-dlp finds no video, the app gets the images with `gallery-dl`. Image-only Threads posts are not supported yet.
+
+`gallery-dl` is licensed GPL-2.0. The app does not include or import it: it runs it as a separate program, so installing it (`pip install ".[images]"`, included in `all`) is up to you.
 
 Portable Standalone Version
 ---------------------------

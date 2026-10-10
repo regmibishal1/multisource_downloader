@@ -112,6 +112,8 @@ _OWN_MESSAGES: Tuple[Tuple[str, str, Optional[str]], ...] = (
     ('This post needs you to be signed in to', AUTH_REQUIRED, FIX_SIGNIN),
     ('Google Drive sign-in needs gdown 6 or newer', MISSING_COMPONENT, HOW_TO_UPDATE),
     ('The download finished but no file was saved.', NO_MEDIA, None),
+    ('Image posts from Threads are not supported yet.', UNSUPPORTED, COPY_LINK),
+    ('gallery-dl is not installed.', MISSING_COMPONENT, HOW_TO_FIX),
 )
 
 _TEXT_RULES: Tuple[Tuple[str, str], ...] = (
@@ -128,8 +130,8 @@ _TEXT_RULES: Tuple[Tuple[str, str], ...] = (
      r'not logged in|cookies? (are|is) (needed|required)|use --cookies', AUTH_REQUIRED),
     (r'javascript runtime|\bejs\b|yt-dlp-ejs|(ffmpeg|ffprobe|deno)( is)? not (installed|found)', MISSING_COMPONENT),
     (r'no video could be found|no video formats found|there.s no video in this|no media found', NO_MEDIA),
-    (r'unsupported url', UNSUPPORTED),
-    (r'http error 404|not found|video unavailable|this video is unavailable|has been removed|post not found|'
+    (r'unsupported url|no suitable extractor', UNSUPPORTED),
+    (r'http error 404|not found|could not be found|video unavailable|this video is unavailable|has been removed|post not found|'
      r'does not exist|this tweet is unavailable|deleted', NOT_FOUND),
     (r'unable to extract|unable to download json metadata|failed to parse|signature extraction failed|'
      r'nsig extraction failed', OUTDATED),

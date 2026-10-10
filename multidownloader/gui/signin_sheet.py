@@ -805,7 +805,9 @@ class SignInsWindow(tk.Toplevel):
             ttk.Label(self.rows, text=method or '', font=f['caption'], width=14).grid(row=r, column=2, sticky='w')
             actions = ttk.Frame(self.rows)
             actions.grid(row=r, column=3, sticky='e', pady=6)
-            if st.state in ('not_needed', 'not_set_up'):
+            if st.platform.signin_need == 'none':
+                pass  # public posts only, nothing to sign in to
+            elif st.state in ('not_needed', 'not_set_up'):
                 ttk.Button(actions, text='Sign in', command=lambda p=st.platform: self._sign_in(p)).pack(side=tk.LEFT)
             else:
                 ttk.Button(actions, text='Refresh', command=lambda p=st.platform: self._refresh(p)).pack(

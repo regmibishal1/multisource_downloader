@@ -238,6 +238,8 @@ def next_step(info: errors.ErrorInfo, platform_key: str = '') -> str:
     if info.action == errors.HOW_TO_FIX:
         if 'Deno' in info.message:
             return 'Install Deno: winget install DenoLand.Deno (or see docs.deno.com)'
+        if 'gallery-dl' in info.message:
+            return 'Install gallery-dl: python -m pip install gallery-dl'
         if 'ffmpeg' in info.message:
             return 'Install ffmpeg: winget install Gyan.FFmpeg (or your package manager)'
         return 'See the README, Troubleshooting.'
