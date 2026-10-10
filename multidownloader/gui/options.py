@@ -29,7 +29,7 @@ THEME_LABELS = (('system', 'Same as Windows'), ('light', 'Light'), ('dark', 'Dar
 
 # the settings this window changes
 KEYS = ('quality', 'write_metadata', 'thumbnails', 'subtitles', 'layout', 'include_title', 'parallel', 'polite',
-        'keep_awake', 'theme', 'check_updates', 'source_organization')
+        'keep_awake', 'theme', 'check_updates', 'source_organization', 'original_streams', 'keep_streams')
 
 
 def updated(prefs: Dict, choices: Dict) -> Dict:
@@ -67,6 +67,7 @@ class OptionsWindow(tk.Toplevel):
             'include_title': tk.BooleanVar(), 'polite': tk.BooleanVar(), 'keep_awake': tk.BooleanVar(),
             'check_updates': tk.BooleanVar(),
             'source_organization': tk.StringVar(),
+            'original_streams': tk.BooleanVar(), 'keep_streams': tk.BooleanVar(),
         }
         self._load(prefs)
 
@@ -106,6 +107,10 @@ class OptionsWindow(tk.Toplevel):
         caption('Without them the run report has no post dates.')
         check('thumbnails', 'Thumbnails')
         check('subtitles', "Subtitles (the uploader's own, not automatic ones)")
+        check('original_streams', 'Keep files exactly as the platform served them (recommended for evidence)')
+        caption('No repairs or re-encoding. When video and audio come separately they are joined without '
+                're-encoding, and the manifest says so. If a file does not play, use Make a playable copy.')
+        check('keep_streams', 'Also keep the separate video and audio streams')
 
         section('Folders and file names')
         for value, text, example in LAYOUT_LABELS:

@@ -44,6 +44,8 @@ def defaults() -> Dict[str, Any]:
         'view': 'full',             # full | simple (brief F21)
         'check_updates': True,      # once a day, ask pypi.org for the newest yt-dlp and gallery-dl (F24)
         'source_organization': '',  # Source-Organization in export packages (F26)
+        'original_streams': True,   # keep files exactly as the platform served them (F30)
+        'keep_streams': False,      # also keep separate video and audio streams after joining them
     }
 
 
@@ -60,6 +62,8 @@ def download_options(prefs: Dict[str, Any], handler: Optional[str]) -> Dict[str,
         'thumbnails': prefs.get('thumbnails', True),
         'subtitles': prefs.get('subtitles', False),
         'layout': prefs.get('layout', 'account'),
+        'original_streams': prefs.get('original_streams', True),
+        'keep_streams': prefs.get('keep_streams', False),
     }
     if prefs.get('include_title'):
         opts['include_title'] = True
@@ -86,6 +90,8 @@ _VALIDATORS = {
     'theme': lambda v: v in THEMES,
     'view': lambda v: v in ('full', 'simple'),
     'check_updates': lambda v: isinstance(v, bool),
+    'original_streams': lambda v: isinstance(v, bool),
+    'keep_streams': lambda v: isinstance(v, bool),
     'source_organization': lambda v: isinstance(v, str) and len(v) <= 200 and '\n' not in v,
 }
 
