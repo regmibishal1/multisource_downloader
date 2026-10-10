@@ -11,8 +11,10 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from multidownloader import detect, logs, session_store, signins
+from multidownloader import detect, logs, runs, session_store, signins
+from multidownloader.awake import keep_awake
 from multidownloader.core import Downloader
+from multidownloader.gui import crash
 from multidownloader.gui.signin_sheet import SignInSheet, SignInsWindow
 from multidownloader.gui.theme import COLORS
 from multidownloader.platforms import BY_HANDLER
@@ -39,8 +41,9 @@ MAX_LISTED_ERRORS = 10
 
 
 class DownloaderUI:
-    def __init__(self, root):
+    def __init__(self, root, *, offer_resume: bool = True):
         self.root = root
+        self.unfinished = None
         root.title('Multi-Source Downloader')
 
         self.urls_var = tk.StringVar()
@@ -62,6 +65,17 @@ class DownloaderUI:
         self.signin_summary.grid(row=0, column=1, sticky='e', padx=(0, 8))
         self.signins_btn = ttk.Button(header, text='Sign-ins', command=self.open_signins)
         self.signins_btn.grid(row=0, column=2, sticky='e')
+
+        # shown only when the last run stopped before it finished (brief T20)
+        self.resume_var = tk.StringVar()
+        self.resume_bar = ttk.Frame(header, padding=(8, 6), relief='solid', borderwidth=1)
+        self.resume_bar.columnconfigure(0, weight=1)
+        ttk.Label(self.resume_bar, textvariable=self.resume_var, foreground=COLORS['warning'],
+                  wraplength=420, justify='left').grid(row=0, column=0, sticky='w')
+        ttk.Button(self.resume_bar, text='Resume', command=self.resume_unfinished).grid(row=0, column=1, padx=(8, 4))
+        ttk.Button(self.resume_bar, text='Dismiss', command=self.dismiss_unfinished).grid(row=0, column=2)
+        if offer_resume:
+            self.check_unfinished()
 
         ttk.Label(self.frm, text='Links (paste them, or any text that contains them):', font=('Segoe UI', 10, 'bold')).grid(
             row=1, column=0, columnspan=2, sticky='w', pady=(0, 5)
@@ -90,6 +104,29 @@ class DownloaderUI:
         self.refresh_signin_summary()
 
     # ------------------------------------------------------------------
+    def check_unfinished(self):
+        self.unfinished = runs.last_unfinished_run()
+        if self.unfinished:
+            self.resume_var.set('! ' + self.unfinished.message())
+            self.resume_bar.grid(row=1, column=0, columnspan=3, sticky='ew', pady=(10, 0))
+        else:
+            self.resume_bar.grid_remove()
+
+    def resume_unfinished(self):
+        unfinished = self.unfinished
+        if not unfinished:
+            return
+        self.resume_bar.grid_remove()
+        self.dir_var.set(str(unfinished.output_root))
+        links = [(link['url'], link.get('handler') or self.source_var.get()) for link in unfinished.remaining]
+        self.start_download([url for url, _h in links], handlers=[h for _u, h in links], resumed=unfinished)
+
+    def dismiss_unfinished(self):
+        if self.unfinished:
+            self.unfinished.close('dismissed')
+        self.unfinished = None
+        self.resume_bar.grid_remove()
+
     def refresh_signin_summary(self):
         summary = signins.summary()
         attention = 'attention' in summary
@@ -107,7 +144,8 @@ class DownloaderUI:
         if directory:
             self.dir_var.set(directory)
 
-    def start_download(self, urls=None):
+    def start_download(self, urls=None, *, handlers=None, resumed=None):
+        """Download urls (default: the links in the box). handlers: one per url (resume of a mixed run)."""
         if urls is None:
             # Pull every link out of whatever was pasted (chat exports,
             # reports, comma or space separated lists) and drop repeats.
@@ -135,45 +173,59 @@ class DownloaderUI:
 
         downloader = Downloader(out_dir, logger=logging.getLogger('multidownloader'))
         try:
-            # links saved in earlier runs are recorded as already saved, not downloaded again
-            run = Run(out_dir, history=History())
+            # links saved in earlier runs are recorded as already saved, not
+            # downloaded again; the run is recorded so it can be resumed if it stops
+            run = Run(out_dir, history=History(), last_run_pointer=runs.default_last_run_pointer())
         except OSError as exc:
             messagebox.showerror('Cannot save here', f'Could not write to {out_dir}. Choose another folder.\n\n{exc}',
                                  parent=self.root)
             return
+        handlers = list(handlers) if handlers else [source] * len(urls)
+        run.plan({'url': url, 'handler': handler} for url, handler in zip(urls, handlers))
+        if resumed:
+            resumed.close('resumed', by_run=run.run_id)
 
         # source was read above: the worker thread must not read Tk variables,
         # and changing the dropdown mid-run must not reroute remaining links
         self.download_btn.state(['disabled'])
         threading.Thread(
             target=self._download_with_core,
-            args=(downloader, run, urls, source),
+            args=(downloader, run, list(zip(urls, handlers)), source),
             daemon=True,
         ).start()
 
-    def _download_with_core(self, downloader, run, urls, source):
+    def _download_with_core(self, downloader, run, links, source):
         errors = []
-        for i, url in enumerate(urls, 1):
-            # Google Drive needs no option: public first, the saved sign-in
-            # only when Drive refuses the link
-            opts = {}
-            if source == 'Instagram':
-                opts['auth'] = 'auto'
-            if source in COOKIE_SOURCES:
-                opts['use_session'] = True
+        urls = [url for url, _handler in links]
+        try:
+            # hold off system sleep for the whole run (brief T21); on this thread,
+            # because Windows applies it per thread
+            with keep_awake():
+                for i, (url, handler) in enumerate(links, 1):
+                    # Google Drive needs no option: public first, the saved sign-in
+                    # only when Drive refuses the link
+                    opts = {}
+                    if handler == 'Instagram':
+                        opts['auth'] = 'auto'
+                    if handler in COOKIE_SOURCES:
+                        opts['use_session'] = True
 
-            self.root.after(0, self.status_var.set, f'Saving {i} of {len(urls)}: {url}')
-            logging.info('Delegating download to core: %s %s %s', source, url, opts)
-            # staging, hashing and the manifest happen inside run.download
-            result = run.download(downloader, source, url, opts)
-            if result.status == 'saved':
-                logging.info('Saved %s: %s file(s)', url, len(result.files))
-            elif result.status == 'already_saved':
-                logging.info('Already saved %s on %s', url, result.previous['saved_at'][:10])
-            else:
-                errors.append((url, result.error_detail or result.error_message or ''))
-                logging.error('Core download error for %s: %s', url, result.error_message)
-
+                    self.root.after(0, self.status_var.set, f'Saving {i} of {len(links)}: {url}')
+                    logging.info('Delegating download to core: %s %s %s', handler, url, opts)
+                    # staging, hashing and the manifest happen inside run.download
+                    result = run.download(downloader, handler, url, opts)
+                    if result.status == 'saved':
+                        logging.info('Saved %s: %s file(s)', url, len(result.files))
+                    elif result.status == 'already_saved':
+                        logging.info('Already saved %s on %s', url, result.previous['saved_at'][:10])
+                    else:
+                        errors.append((url, result.error_detail or result.error_message or ''))
+                        logging.error('Core download error for %s: %s', url, result.error_message)
+        except BaseException:
+            # the run stays unfinished on disk, so it is offered for resuming;
+            # the crash handler shows the error
+            self.root.after(0, self.download_btn.state, ['!disabled'])
+            raise
         run.finish()
         self.root.after(0, self._run_finished, source, urls, errors, run)
 
@@ -220,7 +272,9 @@ def main():
     logs.setup()
     session_store.migrate_legacy_sessions()
     root = tk.Tk()
-    DownloaderUI(root)
+    app = DownloaderUI(root)
+    # errors in callbacks and worker threads get a dialog instead of a silent freeze
+    crash.install(root, on_crash=lambda: app.download_btn.state(['!disabled']))
     root.mainloop()
 
 

@@ -97,6 +97,8 @@ Options:
 - Unsupported hosts are reported in the summary so you can triage manually.
 - Exit codes: `0` everything attempted succeeded, `1` some downloads failed, `2` nothing was attempted because every link was from an unsupported site.
 - `--force` downloads links again even if an earlier run saved them.
+- `--resume` finishes the last run that stopped before it was done (closed window, crash, power cut), in the same download folder. Starting a new run tells you when there is one to resume.
+- The computer is kept from sleeping while a run is going (the screen may still turn off); `--no-keep-awake` turns that off.
 
 What each run saves
 -------------------
@@ -105,6 +107,7 @@ What each run saves
 - Media goes into the download folder; next to it, the post's details: yt-dlp's `.info.json` (caption, upload time, uploader, counts) and thumbnail, Instaloader's `.json`, or a `.drive.json` for Drive files. Cookies are removed from `.info.json` files, and nothing is embedded into the media.
 - Each link first downloads into `_staging/` and is moved into place once complete, so half-finished files never mix with the archive. An existing file is never overwritten: a different file with the same name is saved as `name (2).ext`, and an identical one is kept once.
 - Every run writes `_runs/<run id>/` with `manifest.jsonl` (one line per link, written as each finishes), `manifest.csv`, and `SHA256SUMS.txt`. To check later that no file changed, run this from the download folder: `sha256sum -c _runs/<run id>/SHA256SUMS.txt`.
+- In the window, a bar at the top offers **Resume** or **Dismiss** when the last run stopped early. If something goes wrong, a dialog says so (instead of the window freezing), with **Copy details** (sign-ins and your home folder removed; check before sharing, since it can include links you collected) and **Report problem**, which opens an empty problem report on GitHub for you to paste into.
 - Links saved in earlier runs, even shared in another format, are recorded as "already saved" and not downloaded again. The list lives in `history.sqlite` in your user data folder (`%LOCALAPPDATA%\multisource-downloader` on Windows).
 - Without ffmpeg, some videos are saved as separate video and audio files. Install ffmpeg (`winget install Gyan.FFmpeg`) for single merged files.
 

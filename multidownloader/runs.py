@@ -205,7 +205,11 @@ def post_from_metadata(path: Path) -> Optional[Dict]:
 class Run:
     """Downloads for one batch of links, with staging and a manifest."""
 
-    def __init__(self, out_root, *, run_id: Optional[str] = None, history=None, force: bool = False):
+    def __init__(self, out_root, *, run_id: Optional[str] = None, history=None, force: bool = False,
+                 last_run_pointer: Optional[Path] = None):
+        """last_run_pointer: where plan() records this run for resuming; only the app's own entry
+        points pass one (runs.default_last_run_pointer()), so tests never touch user data."""
+        self.last_run_pointer = last_run_pointer
         """history: a History to skip links saved before (None: no skipping). force: download them anyway."""
         self.history = history
         self.force = force
@@ -218,7 +222,28 @@ class Run:
         self._jobs = 0
         self._jsonl = open(self.dir / 'manifest.jsonl', 'a', encoding='utf-8', newline='\n')
         self.finished = False
+        self._planned = False
         clean_old_staging(self.root)
+
+    def plan(self, links: Iterable[Dict]) -> None:
+        """Record the links this run will try, so a run that stops can be resumed.
+
+        links: dicts with 'url' and optionally 'handler' and 'hint'. Also points
+        last_run_pointer (when set) at this run.
+        """
+        links = [{'url': link['url'], 'handler': link.get('handler'), 'hint': link.get('hint') or ''}
+                 for link in links]
+        _write_json_atomic(self.dir / PLAN_FILENAME, {
+            'run_id': self.run_id, 'output_root': str(self.root), 'created_at': utc_now(),
+            'finished': False, 'links': links,
+        })
+        self._planned = True
+        if self.last_run_pointer is None:
+            return
+        try:
+            _write_json_atomic(Path(self.last_run_pointer), {'run_dir': str(self.dir)})
+        except OSError as exc:
+            _log.warning('Could not record the last run: %s', exc)
 
     # --- recording -----------------------------------------------------------
     def _record(self, result: JobResult) -> JobResult:
@@ -328,6 +353,14 @@ class Run:
             return self.counts()
         self._jsonl.close()
         self.finished = True
+        if self._planned:
+            plan_path = self.dir / PLAN_FILENAME
+            try:
+                plan = json.loads(plan_path.read_text(encoding='utf-8'))
+                plan.update({'finished': True, 'finished_at': utc_now()})
+                _write_json_atomic(plan_path, plan)
+            except (OSError, ValueError) as exc:
+                _log.warning('Could not mark the run finished: %s', exc)
         with open(self.dir / 'manifest.csv', 'w', encoding='utf-8-sig', newline='') as fp:
             writer = csv.DictWriter(fp, fieldnames=CSV_FIELDS, extrasaction='ignore')
             writer.writeheader()
@@ -403,5 +436,70 @@ def verify_sums(root, sums_file) -> Iterable[str]:
                 yield f'changed: {rel}'
 
 
-__all__ = ['FileRecord', 'JobResult', 'Run', 'classify', 'clean_old_staging', 'post_from_metadata',
-           'read_manifest', 'sha256_file', 'verify_sums']
+# --- resuming a run that stopped (brief T20) ------------------------------------
+
+PLAN_FILENAME = 'run.json'
+LAST_RUN_FILENAME = 'last_run.json'
+
+
+def _write_json_atomic(path: Path, data: Dict) -> None:
+    from .session_store import _atomic_write
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _atomic_write(path, json.dumps(data, ensure_ascii=False, indent=2).encode('utf-8'))
+
+
+def default_last_run_pointer() -> Path:
+    """last_run.json in the per-user data folder."""
+    from .appdirs import data_dir
+
+    return data_dir() / LAST_RUN_FILENAME
+
+
+@dataclass
+class UnfinishedRun:
+    run_dir: Path
+    output_root: Path
+    run_id: str
+    remaining: List[Dict]  # {'url', 'handler', 'hint'} for links with no result yet
+
+    def message(self) -> str:
+        n = len(self.remaining)
+        noun = 'link was' if n == 1 else 'links were'
+        return f'Your last run stopped before it finished. {n} {noun} not done.'
+
+    def close(self, how: str, by_run: Optional[str] = None) -> None:
+        """Mark the old run handled ("resumed" or "dismissed") so it is not offered again."""
+        path = self.run_dir / PLAN_FILENAME
+        try:
+            plan = json.loads(path.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            plan = {}
+        plan.update({'closed': how, 'closed_at': utc_now(), 'resumed_by': by_run})
+        _write_json_atomic(path, plan)
+
+
+def last_unfinished_run(pointer: Optional[Path] = None) -> Optional[UnfinishedRun]:
+    """The most recent run that stopped with links not done, unless already resumed or dismissed."""
+    pointer = Path(pointer) if pointer else default_last_run_pointer()
+    try:
+        run_dir = Path(json.loads(pointer.read_text(encoding='utf-8'))['run_dir'])
+        plan = json.loads((run_dir / PLAN_FILENAME).read_text(encoding='utf-8'))
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    if plan.get('finished') or plan.get('closed'):
+        return None
+    done = set()
+    manifest = run_dir / 'manifest.jsonl'
+    if manifest.exists():
+        done = {line.get('input_url') for line in read_manifest(manifest)}
+    remaining = [link for link in plan.get('links', []) if link.get('url') not in done]
+    if not remaining:
+        return None
+    return UnfinishedRun(run_dir, Path(plan.get('output_root') or run_dir.parents[1]), plan.get('run_id', ''),
+                         remaining)
+
+
+__all__ = ['FileRecord', 'JobResult', 'Run', 'UnfinishedRun', 'classify', 'clean_old_staging',
+           'default_last_run_pointer', 'last_unfinished_run', 'post_from_metadata', 'read_manifest', 'sha256_file',
+           'verify_sums']

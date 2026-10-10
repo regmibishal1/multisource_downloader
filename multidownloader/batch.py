@@ -9,7 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from . import detect, logs, platforms, session_store, signins
+from . import detect, logs, platforms, runs, session_store, signins
+from .awake import keep_awake
 from .core import Downloader
 from .history import History
 from .runs import Run
@@ -104,17 +105,32 @@ def execute_batch(
     history: Optional[History] = None,
     force: bool = False,
     include_title: bool = False,
+    last_run_pointer: Optional[Path] = None,
+    stay_awake: bool = False,
 ) -> Dict[str, object]:
-    """Download items. With a history, links saved before are recorded as already saved, unless force."""
+    """Download items. With a history, links saved before are recorded as already saved, unless force.
+
+    last_run_pointer: record the run there so it can be resumed if it stops.
+    stay_awake: hold off system sleep while downloading.
+    """
     logger = logger or logging.getLogger('multidownloader.batch')
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    items = list(items)
 
     if downloader is None:
         downloader = Downloader(str(out_dir), logger=logger)
     # a dry run only plans; a real run records every link in a manifest
-    run = None if dry_run else Run(out_dir, history=history, force=force)
+    run = None if dry_run else Run(out_dir, history=history, force=force, last_run_pointer=last_run_pointer)
+    if run:
+        run.plan({'url': item.url, 'handler': detect_handler(item.source_hint, item.url), 'hint': item.source_hint}
+                 for item in items)
+    with keep_awake(stay_awake and run is not None):
+        return _execute(items, run, downloader, logger, limit=limit, per_source_limit=per_source_limit,
+                        dry_run=dry_run, include_title=include_title)
 
+
+def _execute(items, run, downloader, logger, *, limit, per_source_limit, dry_run, include_title):
     counts: Dict[str, int] = {}
     attempted = 0
     completed: List[Tuple[str, str]] = []
@@ -191,7 +207,8 @@ def execute_batch(
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description='Download items listed by loot_report_scraper outputs.')
-    parser.add_argument('input', type=Path, help='Path to grouped_by_source.json or grouped_by_source.csv')
+    parser.add_argument('input', type=Path, nargs='?',
+                        help='Path to grouped_by_source.json or grouped_by_source.csv')
     parser.add_argument('--format', choices=['json', 'csv'], help='Override input format')
     parser.add_argument('--out-dir', type=Path, default=DEFAULT_OUTPUT_DIR, help='Download destination directory')
     parser.add_argument('--limit', type=int, help='Maximum total items to attempt')
@@ -199,6 +216,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument('--dry-run', action='store_true', help='Only print actions without downloading')
     parser.add_argument('--include-title', action='store_true',
                         help='Add the post title (first 60 characters) to file names')
+    parser.add_argument('--resume', action='store_true',
+                        help='Finish the last run that stopped before it was done, in the same output folder')
+    parser.add_argument('--no-keep-awake', action='store_true',
+                        help='Let the computer sleep during the run')
     parser.add_argument('--force', action='store_true',
                         help='Download links again even if an earlier run saved them')
     parser.add_argument('--verbose', action='store_true', help='Enable verbose logging')
@@ -213,7 +234,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     session_store.migrate_legacy_sessions()
     logger = logging.getLogger('multidownloader.batch')
 
-    manifest = load_manifest(args.input, fmt=args.format)
+    unfinished = runs.last_unfinished_run()
+    out_dir = args.out_dir
+    if args.resume:
+        if not unfinished:
+            logger.error('There is no unfinished run to resume.')
+            return 2
+        logger.info('%s Resuming it in %s.', unfinished.message(), unfinished.output_root)
+        manifest = [ManifestItem(source_hint=link.get('hint') or '', url=link['url']) for link in unfinished.remaining]
+        out_dir = unfinished.output_root
+    elif args.input is None:
+        parser.error('give a manifest file, or --resume')
+    else:
+        if unfinished:
+            logger.warning('%s Run with --resume to finish it.', unfinished.message())
+        manifest = load_manifest(args.input, fmt=args.format)
     unique, duplicates = detect.unique_urls(item.url for item in manifest)
     logger.info(detect.summarize(unique, duplicates))
     # informational only: the run goes ahead without a sign-in
@@ -222,7 +257,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                        platform.name, platform.key)
     result = execute_batch(
         manifest,
-        args.out_dir,
+        out_dir,
         limit=args.limit,
         per_source_limit=args.per_source_limit,
         dry_run=args.dry_run,
@@ -230,7 +265,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         history=None if args.dry_run else History(),
         force=args.force,
         include_title=args.include_title,
+        last_run_pointer=None if args.dry_run else runs.default_last_run_pointer(),
+        stay_awake=not args.no_keep_awake,
     )
+    if args.resume and unfinished and result['run_dir']:
+        unfinished.close('resumed', by_run=Path(result['run_dir']).name)
 
     logger.info('Attempted: %s, completed: %s, already saved: %s, skipped: %s, errors: %s', result['attempted'],
                 len(result['completed']), len(result['already_saved']), len(result['skipped']), len(result['errors']))
