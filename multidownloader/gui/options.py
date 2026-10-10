@@ -29,7 +29,7 @@ THEME_LABELS = (('system', 'Same as Windows'), ('light', 'Light'), ('dark', 'Dar
 
 # the settings this window changes
 KEYS = ('quality', 'write_metadata', 'thumbnails', 'subtitles', 'layout', 'include_title', 'parallel', 'polite',
-        'keep_awake', 'theme', 'check_updates')
+        'keep_awake', 'theme', 'check_updates', 'source_organization')
 
 
 def updated(prefs: Dict, choices: Dict) -> Dict:
@@ -39,6 +39,8 @@ def updated(prefs: Dict, choices: Dict) -> Dict:
         if key not in choices:
             continue
         value = choices[key]
+        if key == 'source_organization':
+            value = ' '.join(str(value).split())
         if key == 'parallel':
             try:
                 value = max(1, min(MAX_PARALLEL, int(value)))
@@ -64,6 +66,7 @@ class OptionsWindow(tk.Toplevel):
             'write_metadata': tk.BooleanVar(), 'thumbnails': tk.BooleanVar(), 'subtitles': tk.BooleanVar(),
             'include_title': tk.BooleanVar(), 'polite': tk.BooleanVar(), 'keep_awake': tk.BooleanVar(),
             'check_updates': tk.BooleanVar(),
+            'source_organization': tk.StringVar(),
         }
         self._load(prefs)
 
@@ -133,6 +136,15 @@ class OptionsWindow(tk.Toplevel):
             ttk.Radiobutton(looks, text=text, value=value, variable=self.vars['theme']).pack(side=tk.LEFT,
                                                                                           padx=(0, px(16)))
         caption('Applies the next time you open the app. Windows High Contrast always wins.')
+
+        section('Archive packages')
+        org = ttk.Frame(body)
+        org.grid(row=row, column=0, sticky='ew', pady=px(2))
+        org.columnconfigure(1, weight=1)
+        row += 1
+        ttk.Label(org, text='Organization (optional)').grid(row=0, column=0, sticky='w', padx=(0, px(8)))
+        ttk.Entry(org, textvariable=self.vars['source_organization']).grid(row=0, column=1, sticky='ew')
+        caption('Written into each export package as its Source-Organization. Leave it empty to stay anonymous.')
 
         section('Updates')
         check('check_updates', 'Check once a day whether yt-dlp or gallery-dl needs an update')

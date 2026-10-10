@@ -18,7 +18,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Optional
 
 from multidownloader import appdirs, detect, errors as errors_mod, logs, runs, session_store, settings, signins
-from multidownloader import custody, updates
+from multidownloader import custody, package, updates, verify as verify_mod
 from multidownloader.batch import links_from_file
 from multidownloader.awake import keep_awake
 from multidownloader.core import Downloader
@@ -279,9 +279,16 @@ class DownloaderUI:
         self.stop_btn.state(['disabled'])
         self.open_btn = ttk.Button(footer, text='Open folder', command=self.open_output)
         self.open_btn.grid(row=0, column=2, sticky='e', padx=(0, px(8)))
+        # archive tools (brief F26, F28): a run folder or package, checked or packaged in the background
+        self.verify_btn = ttk.Button(footer, text='Verify files', command=self.verify_files)
+        self.verify_btn.grid(row=0, column=3, sticky='e', padx=(0, px(8)))
+        self.package_btn = ttk.Button(footer, text='Export package...', command=self.export_package)
+        self.package_btn.grid(row=0, column=4, sticky='e', padx=(0, px(8)))
+        self.package_btn.state(['disabled'])
         self.export_btn = ttk.Button(footer, text='Export report', command=self.export_report)
-        self.export_btn.grid(row=0, column=3, sticky='e')
+        self.export_btn.grid(row=0, column=5, sticky='e')
         self.export_btn.state(['disabled'])
+        self._archive_busy = False
 
         # status bar: summary, progress, and the details log (brief F8)
         bar = ttk.Frame(self.frm)
@@ -339,7 +346,8 @@ class DownloaderUI:
         for button, index in ((self.download_btn, 0), (self.import_btn, 0), (self.dir_btn, 0),
                               (self.signins_btn, 0), (self.options_btn, 1), (self.stop_btn, 1),
                               (self.simple_stop, 1), (self.open_btn, 5), (self.simple_open, 5),
-                              (self.export_btn, 0), (self.retry_btn, 0)):
+                              (self.export_btn, 0), (self.retry_btn, 0), (self.verify_btn, 0),
+                              (self.package_btn, 8)):
             self.mnemonic(button, index)
         self.set_view(view or self.prefs.get('view') or 'full')
         self.refresh_signin_summary()
@@ -717,6 +725,7 @@ class DownloaderUI:
             self.table.finished(url, run.skip(url, 'unsupported'))
         self._last_run = run
         self.export_btn.state(['disabled'])
+        self.package_btn.state(['disabled'])
         self.retry_btn.grid_remove()
         if resumed:
             resumed.close('resumed', by_run=run.run_id)
@@ -787,6 +796,8 @@ class DownloaderUI:
                 self._run_finished(*event[1:])
             elif event[0] == 'updates':
                 self.show_updates(event[1])
+            elif event[0] in ('verified', 'packaged'):
+                self._archive_done(*event)
             elif event[0] == 'crashed':
                 self._reset_controls()
             return
@@ -849,6 +860,7 @@ class DownloaderUI:
         self.notice_var.set('')
         self.refresh_signin_summary()
         self.export_btn.state(['!disabled'] if run else ['disabled'])
+        self.package_btn.state(['!disabled'] if run else ['disabled'])
         failed = self.table.count('failed')
         self.retry_btn.configure(text=f'Retry failed ({failed})')
         if failed:
@@ -995,6 +1007,73 @@ class DownloaderUI:
             'put them at risk. Include them anyway?', parent=self.root, default='no')
         path = report.export(run.dir, run.results, target, include_accounts=include)
         self.status_var.set(f'Report saved: {path} (and {path.with_suffix(".csv").name}).')
+
+    # --- verify and export package (brief F26, F28) -------------------------------------
+    def _finished_run_dir(self):
+        run = self._last_run
+        return run.dir if run is not None and run.finished else None
+
+    def verify_files(self):
+        """Verify the last run, or a run folder or package the user chooses."""
+        if self._archive_busy:
+            return
+        target = self._finished_run_dir()
+        if target is None:
+            chosen = filedialog.askdirectory(parent=self.root, title='Choose a run folder (_runs/...) or a package',
+                                             initialdir=self.dir_var.get() or None)
+            if not chosen:
+                return
+            target = Path(chosen)
+        self._start_archive_job('verified', 'Checking every file...', lambda: verify_mod.verify(
+            target, check_custody=True, anchor_path=custody.default_anchor_path(), record=True))
+
+    def export_package(self):
+        run_dir = self._finished_run_dir()
+        if run_dir is None or self._archive_busy:
+            return
+        out = filedialog.askdirectory(parent=self.root, title='Where to save the archive package',
+                                      initialdir=str(Path.home()))
+        if not out:
+            return
+        org = self.prefs.get('source_organization') or ''
+        self._start_archive_job('packaged', 'Making the archive package...', lambda: package.export(
+            run_dir, out, source_organization=org, anchor_path=custody.default_anchor_path()))
+
+    def _start_archive_job(self, kind, status, work):
+        self._archive_busy = True
+        for button in (self.verify_btn, self.package_btn):
+            button.state(['disabled'])
+        self.status_var.set(status)
+
+        def run():
+            try:
+                self._events.put((kind, work(), None))
+            except Exception as exc:  # shown in plain words, never a crash dialog
+                self._events.put((kind, None, exc))
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def _archive_done(self, kind, result, error):
+        self._archive_busy = False
+        self.verify_btn.state(['!disabled'])
+        if self._finished_run_dir() is not None:
+            self.package_btn.state(['!disabled'])
+        if error is not None:
+            text = str(error) if isinstance(error, (package.PackageError, ValueError)) else f'{error}'
+            title = 'Verify files' if kind == 'verified' else 'Export package'
+            self.status_var.set(f'{title}: {text}')
+            messagebox.showerror(title, text, parent=self.root)
+            return
+        if kind == 'verified':
+            lines = result.lines()
+            self.status_var.set(('' if result.ok else '! ') + lines[0])
+            show = messagebox.showinfo if result.ok else messagebox.showwarning
+            shown = lines[:25] + (['...'] if len(lines) > 25 else [])
+            show('Verify files', '\n'.join(shown), parent=self.root)
+        else:
+            self.status_var.set(result.message())
+            messagebox.showinfo('Export package', result.message() + '\n\nAny BagIt tool can check it, and '
+                                'msdl verify --custody shows whether anything changed since.', parent=self.root)
 
     # --- details log (brief F8) -------------------------------------------------------
     def toggle_details(self):

@@ -256,9 +256,11 @@ def verify_package(bag: Path, *, check_custody: bool = False, anchor_path: Optio
         package_anchor = None
         head, seq = (info.get('Custody-Log-Head') or [None])[0], (info.get('Custody-Log-Seq') or [None])[0]
         if head and seq and str(seq).isdigit():
-            package_anchor = {'seq': int(seq), 'head': head, 'at': (info.get('Bagging-Date') or [None])[0]}
+            when = (info.get('Custody-Log-Anchored') or info.get('Bagging-Date') or [None])[0]
+            package_anchor = {'seq': int(seq), 'head': head, 'at': when}
         if logs:
-            report.custody = custody.check(logs[0], anchor_path=anchor_path, package_anchor=package_anchor)
+            report.custody = custody.check(logs[0], anchor_path=anchor_path, package_anchor=package_anchor,
+                                           copy=True)
             # paths in the log are relative to the download folder, which is data/ in the package
             sums = {p: v for _a, entries in manifests if _a == 'sha256' for p, v in entries.items()}
             _compare_with_log(report, sums, prefix='data/')
