@@ -28,7 +28,7 @@ google-auth==2.40.3
 google-auth-httplib2==0.2.0
 googleapis-common-protos==1.70.0
 greenlet==3.2.4
-httplib2==0.31.0
+httplib2==0.32.0
 idna==3.10
 instaloader==4.15
 mutagen==1.48.1
