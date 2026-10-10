@@ -53,7 +53,13 @@ METHOD_LABELS = {
     'file': 'cookies file',
     'password': 'password',
     'webview': 'Sign in here',
+    'oauth': 'Google Cloud project',
 }
+
+WEBVIEW2_URL = 'https://developer.microsoft.com/microsoft-edge/webview2/'
+WEBVIEW2_MESSAGE = "Sign in here needs Microsoft's free WebView2 Runtime."
+PYWEBVIEW_MESSAGE = 'Sign in here needs pywebview: pip install ".[webview]"'
+_WEBVIEW2_CLIENT = r'Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
 
 
 class SignInError(Exception):
@@ -283,6 +289,7 @@ def save_signin(
     browser: Optional[str] = None,
     profile: Optional[str] = None,
     label: Optional[str] = None,
+    user_agent: Optional[str] = None,
     now: Optional[float] = None,
 ) -> SaveResult:
     """Validate, filter and store a sign-in. Raises SignInError with a message to show."""
@@ -295,6 +302,8 @@ def save_signin(
         if method == 'browser':
             raise SignInError(f'No {platform.name} sign-in found in {BROWSER_NAMES.get(browser, browser)}. '
                               f'Sign in to {platform.name} there first.')
+        if method in ('webview', 'password'):
+            raise SignInError(f'{platform.name} did not finish signing you in. Try again.')
         raise SignInError(f'This file does not contain {_a(platform.name)} {platform.name} sign-in. '
                           f'Sign in on {platform.cookie_domains[0]} before exporting.')
     if expired:
@@ -310,7 +319,7 @@ def save_signin(
         'browser': browser,
         'profile': profile,
         'container': None,
-        'user_agent': None,
+        'user_agent': user_agent,
         'account_id': acct,
         'label': label if label is not None else previous.get('label'),
         'imported_at': _now_iso(),
@@ -546,6 +555,14 @@ def status(key_or_platform, now: Optional[float] = None) -> Status:
     platform = key_or_platform if isinstance(key_or_platform, Platform) else _platform(key_or_platform)
     now = time.time() if now is None else now
     meta = read_meta(platform)
+    if meta.get('method') == 'oauth':
+        if not (folder(platform) / 'credentials.json').is_file():
+            return Status(platform, 'expired', 'Signed out. Sign in again', '✕', 'error', 'oauth', None)
+        if meta.get('last_rejected_at'):
+            return Status(platform, 'rejected', 'Your Google connection expired. Reconnect', '✕', 'error',
+                          'oauth', None)
+        return Status(platform, 'ready', 'Connected with your Google Cloud project', '✓', 'success',
+                      'oauth', None)
     cookies = read_cookies(platform)
     if not cookies:
         legacy_user = _legacy_instagram_user(platform)
@@ -604,6 +621,118 @@ def summary(statuses: Optional[List[Status]] = None) -> str:
 
 
 # --- wiring for downloads -----------------------------------------------------
+
+def mark_rejected(platform: Platform) -> None:
+    """Record that the site refused the stored sign-in."""
+    meta = read_meta(platform)
+    if meta:
+        meta['last_rejected_at'] = _now_iso()
+        _write_meta(platform, meta)
+
+
+def save_oauth_signin(platform: Platform) -> None:
+    """Record a Google Drive connection made with the user's own OAuth client."""
+    _write_meta(platform, {
+        'method': 'oauth', 'browser': None, 'profile': None, 'container': None, 'user_agent': None,
+        'account_id': None, 'label': read_meta(platform).get('label'), 'imported_at': _now_iso(),
+        'marker_expires_at': None, 'last_ok_at': None, 'last_rejected_at': None,
+        'terms_version_seen': platform.terms.version if platform.terms else None,
+        'acknowledged_at': _now_iso() if platform.terms else None,
+    })
+    cookies = cookie_path(platform)
+    if cookies.exists():
+        cookies.unlink()  # one sign-in per platform
+
+
+def user_agent_for(handler_or_key: str) -> Optional[str]:
+    """The browser User-Agent a sign-in was made with, if recorded.
+
+    Some sites tie a session to it, so downloads reuse the value from the
+    user's own sign-in window. Never used to impersonate any other browser.
+    """
+    try:
+        platform = _platform(handler_or_key)
+    except KeyError:
+        return None
+    if not cookie_file_for_download(handler_or_key):
+        return None
+    return read_meta(platform).get('user_agent')
+
+
+# --- Sign in here (in-app window) ---------------------------------------------
+
+def _webview2_installed() -> bool:
+    try:
+        import winreg
+    except ImportError:  # not Windows
+        return False
+    roots = (
+        (winreg.HKEY_LOCAL_MACHINE, 'SOFTWARE\\WOW6432Node\\' + _WEBVIEW2_CLIENT),
+        (winreg.HKEY_LOCAL_MACHINE, 'SOFTWARE\\' + _WEBVIEW2_CLIENT),
+        (winreg.HKEY_CURRENT_USER, 'Software\\' + _WEBVIEW2_CLIENT),
+    )
+    for hive, key in roots:
+        try:
+            with winreg.OpenKey(hive, key) as handle:
+                version, _kind = winreg.QueryValueEx(handle, 'pv')
+        except OSError:
+            continue
+        if version and version != '0.0.0.0':
+            return True
+    return False
+
+
+def webview_available() -> Tuple[bool, str]:
+    """Whether "Sign in here" can run on this computer, and why not."""
+    import importlib.util
+
+    if importlib.util.find_spec('webview') is None:
+        return False, PYWEBVIEW_MESSAGE
+    if sys.platform == 'win32' and not _webview2_installed():
+        return False, WEBVIEW2_MESSAGE
+    return True, ''
+
+
+def _webview_expiry(raw) -> int:
+    if isinstance(raw, (int, float)):
+        return max(int(raw), 0)
+    if not raw:
+        return 0
+    from email.utils import parsedate_to_datetime
+
+    try:
+        value = int(parsedate_to_datetime(str(raw)).timestamp())
+    except (TypeError, ValueError, IndexError, OverflowError):
+        return 0
+    return value if value > 366 * 86400 else 0  # WebView2 reports session cookies near 1970
+
+
+def cookies_from_webview(items: Iterable[Dict]) -> List[Cookie]:
+    """Convert the sign-in window's cookie dicts (see gui/signin_window.py)."""
+    cookies = []
+    for item in items:
+        name = item.get('name')
+        if not name:
+            continue
+        domain = item.get('domain') or ''
+        cookies.append(Cookie(
+            domain=domain,
+            include_subdomains=domain.startswith('.'),
+            path=item.get('path') or '/',
+            secure=bool(item.get('secure')),
+            expires=_webview_expiry(item.get('expires')),
+            name=name,
+            value=item.get('value') or '',
+            http_only=bool(item.get('httponly')),
+        ))
+    return cookies
+
+
+def save_webview_signin(platform: Platform, items: Iterable[Dict], *, user_agent: Optional[str],
+                        terms_version: Optional[str]) -> SaveResult:
+    return save_signin(platform, cookies_from_webview(items), method='webview', terms_version=terms_version,
+                       user_agent=user_agent)
+
 
 def cookie_file_for_download(handler_or_key: str) -> Optional[Path]:
     """The cookies.txt a download should use, or None when there is no sign-in."""
@@ -723,6 +852,7 @@ __all__ = [
     'filter_for', 'find_firefox_signins', 'find_markers', 'firefox_profiles', 'format_cookies_txt',
     'import_cookies_file', 'import_cookies_text', 'import_from_browser', 'looks_like_auth_error',
     'needs_terms_ack', 'parse_cookies_txt', 'preflight_warnings', 'read_cookies', 'read_meta',
-    'looks_like_block', 'record_result', 'refresh_from_browser', 'remove', 'rename', 'save_refreshed', 'remove_all', 'save_signin', 'status', 'summary',
+    'cookies_from_webview', 'looks_like_block', 'mark_rejected', 'save_oauth_signin', 'save_webview_signin',
+    'user_agent_for', 'webview_available', 'record_result', 'refresh_from_browser', 'remove', 'rename', 'save_refreshed', 'remove_all', 'save_signin', 'status', 'summary',
     'writes_back',
 ]

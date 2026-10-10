@@ -18,9 +18,12 @@ dependencies = [
 
 [project.optional-dependencies]
 instagram = ["instaloader>=4.11"]
-# gdown 6 removed the fuzzy= argument the Drive handler passes.
-drive = ["gdown>=5,<6", "PyDrive2>=1.20"]
-all = ["multisource-downloader[instagram,drive]"]
+# Drive sign-in with Google cookies needs gdown 6 (cookies_file); public
+# links work with 5 too.
+drive = ["gdown>=5", "PyDrive2>=1.20"]
+# "Sign in here": the platform's own sign-in page in a small app window.
+webview = ["pywebview>=5"]
+all = ["multisource-downloader[instagram,drive,webview]"]
 dev = ["ruff>=0.6"]
 
 [project.scripts]

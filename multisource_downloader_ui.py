@@ -47,7 +47,6 @@ class DownloaderUI:
         self.notice_var = tk.StringVar()
         self.signin_summary_var = tk.StringVar()
         self.source_var = tk.StringVar(value=SOURCE_CHOICES[0])
-        self.method_var = tk.StringVar(value='Public (gdown)')
 
         self.frm = ttk.Frame(self.root, padding=20)
         self.frm.pack(fill=tk.BOTH, expand=True)
@@ -77,20 +76,6 @@ class DownloaderUI:
         self.src_menu = ttk.Combobox(self.frm, textvariable=self.source_var, values=SOURCE_CHOICES, state='readonly', width=20)
         self.src_menu.grid(row=4, column=1, sticky='w', pady=(0, 5), padx=(0, 5))
 
-        self.drive_method_label = ttk.Label(self.frm, text='Method:')
-        self.drive_method = ttk.Combobox(
-            self.frm,
-            textvariable=self.method_var,
-            values=['Public (gdown)', 'Authenticated (PyDrive2)'],
-            state='readonly',
-            width=22,
-        )
-        self.drive_method_label.grid(row=5, column=0, sticky='e', pady=(0, 5), padx=(0, 5))
-        self.drive_method.grid(row=5, column=1, sticky='w', pady=(0, 5), padx=(0, 5))
-
-        self.source_var.trace_add('write', self._update_controls)
-        self._update_controls()
-
         self.download_btn = ttk.Button(self.frm, text='Download', command=self.start_download)
         self.download_btn.grid(row=6, column=0, columnspan=2, pady=10)
 
@@ -103,14 +88,6 @@ class DownloaderUI:
         self.refresh_signin_summary()
 
     # ------------------------------------------------------------------
-    def _update_controls(self, *args):
-        if self.source_var.get() == 'Google Drive':
-            self.drive_method_label.grid()
-            self.drive_method.grid()
-        else:
-            self.drive_method_label.grid_remove()
-            self.drive_method.grid_remove()
-
     def refresh_signin_summary(self):
         summary = signins.summary()
         attention = 'attention' in summary
@@ -156,25 +133,21 @@ class DownloaderUI:
 
         downloader = Downloader(out_dir, logger=logging.getLogger('multidownloader'))
 
-        # Capture the selections now: the worker thread must not read Tk
-        # variables, and changing the dropdowns mid-run must not reroute the
-        # remaining URLs to a different handler.
-        drive_method = self.method_var.get()
-
+        # source was read above: the worker thread must not read Tk variables,
+        # and changing the dropdown mid-run must not reroute remaining links
         self.download_btn.state(['disabled'])
         threading.Thread(
             target=self._download_with_core,
-            args=(downloader, urls, source, drive_method),
+            args=(downloader, urls, source),
             daemon=True,
         ).start()
 
-    def _download_with_core(self, downloader, urls, source, drive_method):
+    def _download_with_core(self, downloader, urls, source):
         errors = []
         for i, url in enumerate(urls, 1):
+            # Google Drive needs no option: public first, the saved sign-in
+            # only when Drive refuses the link
             opts = {}
-
-            if source == 'Google Drive':
-                opts['method'] = 'public' if drive_method.startswith('Public') else 'authenticated'
             if source == 'Instagram':
                 opts['auth'] = 'auto'
             if source in COOKIE_SOURCES:

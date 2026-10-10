@@ -79,6 +79,11 @@ class YtDlpHandler:
 
         if cookie_path:
             base_opts['cookiefile'] = str(cookie_path)
+            # some sites tie a session to the browser it was made in, so reuse
+            # the User-Agent of the user's own sign-in window when recorded
+            user_agent = signins.user_agent_for(self.source_key)
+            if user_agent:
+                base_opts['http_headers'] = {'User-Agent': user_agent}
 
         custom = options.get('ytdlp_opts') or {}
         base_opts.update(custom)
