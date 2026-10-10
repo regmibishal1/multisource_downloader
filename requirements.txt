@@ -10,7 +10,7 @@ cffi==2.0.0
 charset-normalizer==3.4.3
 clr_loader==0.3.1; sys_platform == "win32"
 colorama==0.4.6
-cryptography==43.0.3
+cryptography==50.0.0
 filelock==3.19.1
 gallery-dl==1.32.16
 gdown==6.4.2
