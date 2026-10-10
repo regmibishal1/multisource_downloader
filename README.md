@@ -141,6 +141,8 @@ Security and responsible use
 - Manifests contain the account names of the people in the posts. Keep the download folder private and turn on drive encryption (BitLocker on Windows, FileVault on macOS). Exported reports leave account names out by default.
 - Respect each platform's terms and your local law.
 
+To report a security problem privately, see [SECURITY.md](SECURITY.md).
+
 License: MIT (see [LICENSE](LICENSE)). The Windows app lists the license of every package it includes in `THIRD_PARTY_LICENSES.txt`. gallery-dl is GPL-2.0, so the app never includes or imports it: it runs it as a separate program when you install it.
 
 For developers
