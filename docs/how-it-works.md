@@ -14,7 +14,11 @@ and cannot prove, so that someone who collected material with it can explain the
    - **yt-dlp** (YouTube, X, TikTok, Threads, Reddit, Facebook) asks the platform for the post and
      saves the media file the platform serves. When the best video and the best audio are separate
      streams, yt-dlp joins them with ffmpeg into one file without re-encoding (the streams are copied
-     as they are). Without ffmpeg it saves one file the platform already joined, or the two streams.
+     as they are), and the manifest records `"merged": true` with the format ids, for example
+     `["137", "140"]`. Without ffmpeg it saves one file the platform already joined, or the two
+     streams. With **Keep files exactly as the platform served them** (on by default) yt-dlp does not
+     repair or remux the file after download, so its bytes are what the platform sent; **Also keep
+     the separate video and audio streams** saves those too.
    - **Instaloader** (Instagram) saves the photos and videos of the post as served.
    - **gdown** and **PyDrive2** (Google Drive) save the file exactly as stored in Drive.
    - **gallery-dl** (Bluesky, and photo posts on other platforms) saves the images as served. It runs
@@ -29,6 +33,14 @@ and cannot prove, so that someone who collected material with it can explain the
 5. **Record.** The link's result, its files and their SHA-256 go into `manifest.jsonl` straight away;
    `manifest.csv` and `SHA256SUMS.txt` are written when the run finishes. The manifest also records
    which program and version did the download.
+
+## Playable copies
+
+A file kept exactly as served sometimes does not play in every player. **Make a playable copy** (a
+saved link's menu) writes a second file next to it, `<name> (playable).<ext>`, with ffmpeg copying the
+streams into a new container without re-encoding. The original is never changed. The copy is added
+to `SHA256SUMS.txt`, gets a `derived` row in the manifest saying which file it came from and how, and
+`copied` and `hashed` lines in the custody log.
 
 ## The custody log
 

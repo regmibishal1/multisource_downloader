@@ -142,6 +142,8 @@ class JobResult:
     skip_reason: Optional[str] = None
     previous: Optional[Dict] = None  # for already_saved: when and where it was saved before
     notes: Optional[Dict] = None     # {"run": {...}, "link": "..."}: the collector's notes (brief F27)
+    merged: Optional[bool] = None    # separate video and audio streams were joined (brief F30)
+    formats: Optional[List[str]] = None  # the platform's format ids of the saved streams, e.g. ["137", "140"]
 
     def to_dict(self) -> Dict:
         return asdict(self)
@@ -379,8 +381,13 @@ class Run:
                 # another backend did the work (gallery-dl for image posts)
                 result.backend = outcome['backend']
                 result.backend_version = backend_version(result.backend)
-            self.custody.append('captured', {'url': url, 'backend': result.backend,
-                                             'backend_version': result.backend_version})
+            streams = outcome.get('streams') if isinstance(outcome, dict) else None
+            captured = {'url': url, 'backend': result.backend, 'backend_version': result.backend_version}
+            if streams:
+                result.merged = any(s.get('merged') for s in streams)
+                result.formats = [f for s in streams for f in s.get('formats') or []]
+                captured.update(merged=result.merged, formats=result.formats)
+            self.custody.append('captured', captured)
             files = self._collect(stage)
             if not files:
                 result.status = 'failed'

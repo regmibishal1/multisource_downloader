@@ -18,7 +18,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Optional
 
 from multidownloader import appdirs, detect, errors as errors_mod, logs, runs, session_store, settings, signins
-from multidownloader import custody, package, updates, verify as verify_mod
+from multidownloader import custody, package, playable, updates, verify as verify_mod
 from multidownloader.batch import links_from_file
 from multidownloader.awake import keep_awake
 from multidownloader.core import Downloader
@@ -796,7 +796,7 @@ class DownloaderUI:
                 self._run_finished(*event[1:])
             elif event[0] == 'updates':
                 self.show_updates(event[1])
-            elif event[0] in ('verified', 'packaged'):
+            elif event[0] in ('verified', 'packaged', 'playable'):
                 self._archive_done(*event)
             elif event[0] == 'crashed':
                 self._reset_controls()
@@ -965,6 +965,10 @@ class DownloaderUI:
                          command=lambda: open_folder(path.parent))
         menu.add_command(label='Copy link', command=lambda: self._copy(row.url))
         menu.add_command(label='Add note...', command=lambda: self.add_note(row))
+        media = self._row_media(row)
+        menu.add_command(label='Make a playable copy',
+                         state='normal' if media and not self._archive_busy else 'disabled',
+                         command=lambda: self.make_playable(row, media))
         if row.state == 'failed' and row.result is not None:
             menu.add_command(label='Copy error', command=lambda: self._copy(
                 f'{row.result.error_message}\n{row.result.error_detail or ""}'.strip()))
@@ -1009,6 +1013,26 @@ class DownloaderUI:
         self.status_var.set(f'Report saved: {path} (and {path.with_suffix(".csv").name}).')
 
     # --- verify and export package (brief F26, F28) -------------------------------------
+    def _row_media(self, row):
+        """(run folder, path in the download folder) of a saved row's video or audio file, if any."""
+        run_dir = self._finished_run_dir()
+        r = row.result
+        if run_dir is None or r is None or r.status != 'saved' or row.url not in self._run_urls:
+            return None
+        for f in r.files:
+            if f.path.lower().endswith(playable.VIDEO_SUFFIXES):
+                return run_dir, f.path
+        return None
+
+    def make_playable(self, row, media):
+        run_dir, rel = media
+        if not playable.ffmpeg_path():
+            messagebox.showerror('Make a playable copy', 'ffmpeg is not installed. Install it '
+                                 '(winget install Gyan.FFmpeg), then try again.', parent=self.root)
+            return
+        self._start_archive_job('playable', 'Making a playable copy...', lambda: playable.make_playable_copy(
+            run_dir, rel, url=row.url, anchor_path=custody.default_anchor_path()))
+
     def _finished_run_dir(self):
         run = self._last_run
         return run.dir if run is not None and run.finished else None
@@ -1059,10 +1083,13 @@ class DownloaderUI:
         if self._finished_run_dir() is not None:
             self.package_btn.state(['!disabled'])
         if error is not None:
-            text = str(error) if isinstance(error, (package.PackageError, ValueError)) else f'{error}'
-            title = 'Verify files' if kind == 'verified' else 'Export package'
+            text = str(error)
+            title = {'verified': 'Verify files', 'packaged': 'Export package'}.get(kind, 'Make a playable copy')
             self.status_var.set(f'{title}: {text}')
             messagebox.showerror(title, text, parent=self.root)
+            return
+        if kind == 'playable':
+            self.status_var.set(f'Playable copy saved: {result.name}. The original is unchanged.')
             return
         if kind == 'verified':
             lines = result.lines()

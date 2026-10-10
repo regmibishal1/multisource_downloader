@@ -27,7 +27,7 @@ The head of each custody log is also recorded in `anchors.log` in the per-user d
 | `backend` | The program that downloaded it: `yt-dlp`, `instaloader`, `gdown` or `gallery-dl`. |
 | `backend_version` | That program's version, for example `yt-dlp 2026.8.19`. |
 | `app_version` | This app's version. |
-| `status` | `saved`, `already_saved`, `failed`, `skipped` or `stopped`. |
+| `status` | `saved`, `already_saved`, `failed`, `skipped` or `stopped`; `derived` for a playable copy made later. |
 | `started_at`, `finished_at` | UTC times, `YYYY-MM-DDTHH:MM:SSZ`. |
 | `files` | Each saved file: `path` (relative to the download folder, forward slashes), `bytes`, `sha256`, and `duplicate_of` when an identical file was already there. |
 | `metadata_path` | The post details file among `files`, when there is one. |
@@ -36,6 +36,8 @@ The head of each custody log is also recorded in `anchors.log` in the per-user d
 | `error_detail` | The downloader's own error text, for bug reports. |
 | `skip_reason` | For a skipped link: `unsupported` or `duplicate`. |
 | `previous` | For `already_saved`: when and where an earlier run saved it. |
+| `merged`, `formats` | For yt-dlp downloads: whether separate video and audio streams were joined (without re-encoding), and the platform's format ids of the saved streams, for example `true` and `["137", "140"]`. |
+| `derived_from`, `how` | Only on `derived` rows, written by **Make a playable copy**: the original file and how the copy was made. The copy's own path and SHA-256 are in `files`. |
 | `notes` | Your notes when the link was recorded: `run` (the run's topic, place, collector and notes) and `link` (this link's note). Notes added later are in `notes.json`. |
 | `source_hint` | The platform name the link came with in an imported list, if any. |
 | `wayback_url` | Reserved for an Internet Archive copy; empty for now. |

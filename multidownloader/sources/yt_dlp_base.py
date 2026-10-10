@@ -5,7 +5,7 @@ import logging
 import os
 import shutil
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 try:  # modern yt-dlp versions keep DownloadError in utils but may drop helpers
     import yt_dlp
@@ -38,6 +38,22 @@ def layout_template(platform_key: str, include_title: bool = False, layout: str 
         name += f'_%(title).{TITLE_LENGTH}s'
     folders = {'account': f'{platform_key}/{ACCOUNT_FIELD}/', 'platform': f'{platform_key}/', 'flat': ''}
     return f'{folders.get(layout, folders["account"])}{name}.%(ext)s'
+
+
+def streams_of(info) -> List[Dict]:
+    """[{"id", "merged", "formats"}] for each saved item: merged when separate streams were joined."""
+    if not isinstance(info, dict):
+        return []
+    entries = info.get('entries')
+    if entries:
+        return [s for entry in entries for s in streams_of(entry)]
+    requested = info.get('requested_formats') or []
+    if requested:
+        return [{'id': info.get('id'), 'merged': True,
+                 'formats': [str(f.get('format_id')) for f in requested if f.get('format_id')]}]
+    if info.get('format_id'):
+        return [{'id': info.get('id'), 'merged': False, 'formats': [str(info['format_id'])]}]
+    return []
 
 
 # Options window "Quality" (brief 6.4): with ffmpeg the best video and audio
@@ -166,7 +182,7 @@ class YtDlpHandler:
 
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
+                info = ydl.extract_info(url, download=True)
                 self.logger.info('yt-dlp download complete: %s', url)
                 if cookie_path and signins.writes_back(self.source_key):
                     try:
@@ -179,7 +195,8 @@ class YtDlpHandler:
         finally:
             scrub_info_json(out_dir)
 
-        return True
+        # which streams were saved, and whether video and audio were joined (brief F30)
+        return {'streams': streams_of(info)}
 
     # --- internal helpers ----------------------------------------------------
     def _build_opts(self, out_dir: str, options: Dict, cookie_path: Optional[Path]) -> Dict:
@@ -218,6 +235,13 @@ class YtDlpHandler:
             # the uploader's own subtitles in every language, never auto-generated ones
             base_opts['writesubtitles'] = True
             base_opts['subtitleslangs'] = ['all']
+        if options.get('original_streams', True):
+            # evidence mode (brief F30): no repairs or remuxing after download, so the saved file is the
+            # bytes the platform served; joining separate video and audio copies the streams as they are.
+            # Nothing is ever embedded into media: no metadata or thumbnail postprocessors are added.
+            base_opts['fixup'] = 'never'
+        if options.get('keep_streams'):
+            base_opts['keepvideo'] = True  # also keep the separate video and audio files
 
         if cookie_path:
             base_opts['cookiefile'] = str(cookie_path)

@@ -320,6 +320,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     notes.add_argument('--note', help='Notes')
     parser.add_argument('--quality', choices=['best', '1080', '720', 'audio'], default='best',
                         help='Video quality (default: best available, the original)')
+    parser.add_argument('--repair-files', action='store_true',
+                        help='Let yt-dlp repair files after download (by default files stay exactly as served)')
+    parser.add_argument('--keep-streams', action='store_true',
+                        help='Also keep the separate video and audio streams after joining them')
     parser.add_argument('--no-metadata', action='store_true',
                         help='Do not save post details (.info.json) next to the media')
     parser.add_argument('--include-title', action='store_true',
@@ -375,7 +379,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         history=None if args.dry_run else History(),
         force=args.force,
         include_title=args.include_title,
-        prefs={'quality': args.quality, 'write_metadata': not args.no_metadata},
+        prefs={'quality': args.quality, 'write_metadata': not args.no_metadata,
+               'original_streams': not args.repair_files, 'keep_streams': args.keep_streams},
         last_run_pointer=None if args.dry_run else runs.default_last_run_pointer(),
         anchor_path=None if args.dry_run else custody.default_anchor_path(),
         notes={'topic': args.topic, 'where': args.where, 'collected_by': args.collected_by, 'notes': args.note},
