@@ -155,6 +155,8 @@ Older versions created `cookies.txt` automatically after any download. A file wi
 Testing
 -------
 
+Versions and their history are in [DEPENDENCIES.md](DEPENDENCIES.md); `requirements-lock.txt` is a snapshot of the exact versions the tests last passed with (`python scripts/snapshot_env.py` refreshes it). Before pushing, run `python scripts/check_public.py --commits origin/master..HEAD`: it fails on secrets, personal paths or e-mail addresses, AI mentions and em dashes. CI runs it on every pull request.
+
 Always run test suites with the project environment (`penv`):
 
 ```powershell
