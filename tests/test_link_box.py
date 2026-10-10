@@ -7,10 +7,8 @@ from unittest import mock
 from multidownloader import settings
 from multidownloader.batch import links_from_file
 
-from gui_gate import HAVE_DISPLAY, REASON as GUI_REASON
+from gui_gate import HAVE_DISPLAY, REASON as GUI_REASON, hidden_root
 
-if HAVE_DISPLAY:
-    import tkinter as tk
 
 
 class SettingsTests(unittest.TestCase):
@@ -79,9 +77,7 @@ class LinkBoxTests(unittest.TestCase):
     """Uses a hidden root window only: nothing appears or takes the focus."""
 
     def setUp(self):
-        self.root = tk.Tk()
-        self.root.withdraw()
-        self.addCleanup(self.root.destroy)
+        self.root = hidden_root(self)
         import multisource_downloader_ui as ui
         self.ui = ui
         with mock.patch.object(ui.signins, 'summary', return_value=''):

@@ -13,10 +13,8 @@ from multidownloader.runs import Run
 
 from test_runs import FakeDownloader
 
-from gui_gate import HAVE_DISPLAY, REASON as GUI_REASON
+from gui_gate import HAVE_DISPLAY, REASON as GUI_REASON, hidden_root
 
-if HAVE_DISPLAY:
-    import tkinter as tk
 
 
 class Interrupting(FakeDownloader):
@@ -163,9 +161,7 @@ class KeepAwakeTests(unittest.TestCase):
 @unittest.skipUnless(HAVE_DISPLAY, GUI_REASON)
 class CrashTests(unittest.TestCase):
     def setUp(self):
-        self.root = tk.Tk()
-        self.root.withdraw()
-        self.addCleanup(self.root.destroy)
+        self.root = hidden_root(self)
         for target in ('multidownloader.logs.diagnostics',):
             patcher = mock.patch(target, return_value='diagnostics')
             patcher.start()
