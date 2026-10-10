@@ -35,6 +35,7 @@ def fonts(root: tk.Misc) -> dict:
         'body': tkfont.Font(root=root, family=family, size=10),
         'bold': tkfont.Font(root=root, family=family, size=10, weight='bold'),
         'caption': tkfont.Font(root=root, family=family, size=9),
+        'mono': tkfont.Font(root=root, family=tkfont.nametofont('TkFixedFont').actual('family'), size=9),
     }
     _FONTS[key] = made
     return made

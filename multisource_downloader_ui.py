@@ -10,6 +10,7 @@ import queue
 import threading
 import time
 import tkinter as tk
+from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from typing import Optional
@@ -18,8 +19,10 @@ from multidownloader import detect, errors as errors_mod, logs, runs, session_st
 from multidownloader.batch import links_from_file
 from multidownloader.awake import keep_awake
 from multidownloader.core import Downloader
+from multidownloader import report
 from multidownloader.gui import crash
-from multidownloader.gui.signin_sheet import SignInSheet, SignInsWindow
+from multidownloader.gui.queue_table import FILTERS, QueueTable
+from multidownloader.gui.signin_sheet import SignInSheet, SignInsWindow, open_folder
 from multidownloader.gui.theme import COLORS, fonts, link_label
 from multidownloader.platforms import BY_HANDLER, BY_KEY
 from multidownloader.history import History
@@ -34,6 +37,23 @@ DEFAULT_OUTPUT_DIR = settings.default_output_root()
 
 COOKIE_SOURCES = {'TikTok', 'Threads', 'Twitter', 'Reddit', 'Facebook', 'YouTube'}
 MAX_LISTED_ERRORS = 10
+MAX_LOG_LINES = 2000
+
+
+class _QueueLogHandler(logging.Handler):
+    """Copies log lines (already redacted) to the details pane through a queue."""
+
+    def __init__(self, lines):
+        super().__init__(logging.INFO)
+        self.lines = lines
+        self.addFilter(logs.RedactFilter())
+        self.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s', '%H:%M:%S'))
+
+    def emit(self, record):
+        try:
+            self.lines.put(self.format(record))
+        except Exception:  # never let the log break the app
+            pass
 
 
 class _NoPlatform:
@@ -135,17 +155,68 @@ class DownloaderUI:
         self.dir_btn = ttk.Button(folder, text='Change...', command=self.select_directory)
         self.dir_btn.grid(row=0, column=2, sticky='e', padx=(8, 0))
 
+        self.notice_label = ttk.Label(self.frm, textvariable=self.notice_var, foreground=COLORS['warning'],
+                                      wraplength=860, justify='left')
+        self.notice_label.grid(row=5, column=0, sticky='w', pady=(8, 0))
+
         buttons = ttk.Frame(self.frm)
         buttons.grid(row=6, column=0, sticky='e', pady=(16, 0))
-        self.stop_btn = ttk.Button(buttons, text='Stop', command=self.ask_stop)
-        self.stop_btn.pack(side=tk.LEFT, padx=(0, 8))
-        self.stop_btn.state(['disabled'])
         self.download_btn = ttk.Button(buttons, text='Download', command=self.start_download)
         self.download_btn.pack(side=tk.LEFT)
         self.download_btn.state(['disabled'])
-        self.progress = ttk.Progressbar(self.frm, mode='determinate')
-        self.progress.grid(row=9, column=0, sticky='ew', pady=(6, 0))
+
+        # Queue (brief F1, 6.1)
+        queue_head = ttk.Frame(self.frm)
+        queue_head.grid(row=7, column=0, sticky='ew', pady=(32, 8))
+        queue_head.columnconfigure(0, weight=1)
+        ttk.Label(queue_head, text='Queue', font=f['section']).grid(row=0, column=0, sticky='w')
+        ttk.Label(queue_head, text='Show:').grid(row=0, column=1, sticky='e', padx=(0, 4))
+        self.filter_var = tk.StringVar(value='All')
+        show = ttk.Combobox(queue_head, textvariable=self.filter_var, values=FILTERS, state='readonly', width=9)
+        show.grid(row=0, column=2, sticky='e')
+        show.bind('<<ComboboxSelected>>', lambda _e: self.table.set_filter(self.filter_var.get()))
+        self.retry_btn = ttk.Button(queue_head, text='Retry failed', command=self.retry_failed)
+        self.retry_btn.grid(row=0, column=3, sticky='e', padx=(12, 0))
+        self.retry_btn.grid_remove()
+
+        self.table = QueueTable(self.frm, on_open=self.open_row, on_menu=self.row_menu)
+        self.table.grid(row=8, column=0, sticky='nsew')
+        self.frm.rowconfigure(8, weight=1)
+        self.table.tree.bind('<Delete>', lambda _e: self.remove_rows())
+
+        footer = ttk.Frame(self.frm)
+        footer.grid(row=9, column=0, sticky='ew', pady=(12, 0))
+        footer.columnconfigure(1, weight=1)
+        # Stop sits on the left, away from the other actions (brief 6.1)
+        self.stop_btn = ttk.Button(footer, text='Stop', command=self.ask_stop)
+        self.stop_btn.grid(row=0, column=0, sticky='w')
+        self.stop_btn.state(['disabled'])
+        ttk.Button(footer, text='Open folder', command=self.open_output).grid(row=0, column=2, sticky='e', padx=(0, 8))
+        self.export_btn = ttk.Button(footer, text='Export report', command=self.export_report)
+        self.export_btn.grid(row=0, column=3, sticky='e')
+        self.export_btn.state(['disabled'])
+
+        # status bar: summary, progress, and the details log (brief F8)
+        bar = ttk.Frame(self.frm)
+        bar.grid(row=10, column=0, sticky='ew', pady=(12, 0))
+        bar.columnconfigure(0, weight=1)
+        self.status_label = ttk.Label(bar, textvariable=self.status_var, foreground=COLORS['text-2'],
+                                      wraplength=640, justify='left')
+        self.status_label.grid(row=0, column=0, sticky='w')
+        self.progress = ttk.Progressbar(bar, mode='determinate', length=200)
+        self.progress.grid(row=0, column=1, sticky='e', padx=(12, 12))
         self.progress.grid_remove()
+        self.details_link = link_label(bar, 'Show details', self.toggle_details)
+        self.details_link.grid(row=0, column=2, sticky='e')
+        self.details = tk.Text(self.frm, height=8, wrap='none', font=f['mono'], state='disabled',
+                               relief='solid', borderwidth=1)
+        self._log_lines = queue.Queue()
+        self._log_handler = _QueueLogHandler(self._log_lines)
+        logging.getLogger().addHandler(self._log_handler)
+        if self.prefs.get('details_open'):
+            self.toggle_details()
+        self._last_run = None
+
         # the download thread never touches Tk: it queues events, read here
         self._events = queue.Queue()
         self._runner = None
@@ -153,17 +224,13 @@ class DownloaderUI:
         self._waiting_until = {}
         self.root.after(100, self._poll_events)
 
-        self.status_label = ttk.Label(self.frm, textvariable=self.status_var, foreground=COLORS['text-2'],
-                                      wraplength=860, justify='left')
-        self.status_label.grid(row=7, column=0, sticky='w', pady=(16, 5))
-        self.notice_label = ttk.Label(self.frm, textvariable=self.notice_var, foreground=COLORS['warning'],
-                                      wraplength=860, justify='left')
-        self.notice_label.grid(row=8, column=0, sticky='w')
-
         # keyboard (brief 6.6)
         root.bind_all('<Control-Return>', lambda _e: self.start_download())
         root.bind_all('<Control-o>', lambda _e: self.import_file())
+        root.bind_all('<Control-O>', lambda _e: self.open_output())
         root.bind_all('<Control-l>', lambda _e: self.links.focus_set())
+        root.bind_all('<F5>', lambda _e: self.retry_failed())
+        root.bind_all('<Control-period>', lambda _e: self.ask_stop())
         self.refresh_signin_summary()
 
     # --- the links box ------------------------------------------------------------
@@ -290,11 +357,13 @@ class DownloaderUI:
             self.dir_var.set(os.path.normpath(directory))
             self.save_prefs()
 
-    def start_download(self, urls=None, *, handlers=None, resumed=None):
+    def start_download(self, urls=None, *, handlers=None, resumed=None, keep_queue=False, force=False):
         """Download urls (default: the links in the box), each with its detected platform.
 
-        handlers: one per url, for a resumed run. Links from sites that are not
-        supported are recorded in the run as skipped, not dropped.
+        handlers: one per url (resume, retry). Links from sites that are not
+        supported are recorded in the run as skipped, not dropped. keep_queue
+        re-queues these rows instead of starting a new list (Retry, Download
+        again); force downloads them even if an earlier run saved them.
         """
         if self._runner is not None:
             return
@@ -329,7 +398,7 @@ class DownloaderUI:
         try:
             # links saved in earlier runs are recorded as already saved, not
             # downloaded again; the run is recorded so it can be resumed if it stops
-            run = Run(out_dir, history=History(), last_run_pointer=runs.default_last_run_pointer())
+            run = Run(out_dir, history=History(), force=force, last_run_pointer=runs.default_last_run_pointer())
         except OSError as exc:
             messagebox.showerror('Cannot save here', f'Could not write to {out_dir}. Choose another folder.\n\n{exc}',
                                  parent=self.root)
@@ -337,13 +406,22 @@ class DownloaderUI:
         handlers = list(handlers) if handlers else [(detect.platform_for_url(u) or _NONE).handler for u in urls]
         run.plan([{'url': url, 'handler': handler} for url, handler in zip(urls, handlers)] +
                  [{'url': url, 'handler': None} for url in unsupported])
+        if keep_queue:
+            self.table.requeue(urls)
+        else:
+            self.table.reset(list(zip(urls, handlers)) + [(url, None) for url in unsupported])
         for url in unsupported:
-            run.skip(url, 'unsupported')
+            self.table.finished(url, run.skip(url, 'unsupported'))
+        self._last_run = run
+        self.export_btn.state(['disabled'])
+        self.retry_btn.grid_remove()
         if resumed:
             resumed.close('resumed', by_run=run.run_id)
 
         # everything the worker needs was read above: it must not read Tk variables
         self.save_prefs()
+        self.filter_var.set('All')
+        self.table.set_filter('All')
         self._lock_input(True)
         self.download_btn.configure(text='Downloading...')
         self.download_btn.state(['disabled'])
@@ -397,6 +475,7 @@ class DownloaderUI:
         except queue.Empty:
             pass
         self._show_waiting()
+        self._drain_log()
         self.root.after(100, self._poll_events)
 
     def _handle_event(self, event):
@@ -409,7 +488,9 @@ class DownloaderUI:
             return
         if isinstance(event, JobStarted):
             c['started'] = c.get('started', 0) + 1
+            self.table.started(event.url)
         elif isinstance(event, JobFinished):
+            self.table.finished(event.url, event.result)
             c['done'] = c.get('done', 0) + 1
             status = event.result.status
             c[status] = c.get(status, 0) + 1
@@ -419,13 +500,14 @@ class DownloaderUI:
                               event.result.error_detail)
         elif isinstance(event, HostWaiting):
             self._waiting_until[event.host] = (event.until, event.message.split(' Waiting')[0])
-        elif isinstance(event, JobProgress) and event.fraction is not None:
-            c['last_progress'] = f' {event.fraction * 100:.0f} %'
+            self.table.waiting_note(event.host, event.message.split(' Waiting')[0])
+        elif isinstance(event, JobProgress):
+            self.table.progress(event.url, event.fraction, event.downloaded, event.total)
         if isinstance(event, (JobStarted, JobFinished, JobProgress)):
             total = c.get('total', 0)
             current = min(total, max(1, c.get('started', 0)))
             self.status_var.set(f'Saving {current} of {total}. {c.get("saved", 0)} saved, '
-                                f'{c.get("failed", 0)} failed.{c.get("last_progress", "")}')
+                                f'{c.get("failed", 0)} failed.')
 
     def _show_waiting(self):
         now = time.monotonic()
@@ -454,61 +536,183 @@ class DownloaderUI:
         self._update_summary()
 
     def _run_finished(self, source, urls, errors, run=None, stopped=False):
-        """One summary for the whole run instead of a popup per failed link."""
+        """Update the summary and the queue; no dialog except the sign-in offer (brief 6.1)."""
         self._reset_controls()
         self._waiting_until.clear()
         self.notice_var.set('')
         self.refresh_signin_summary()
-        saved = len(urls) - len(errors)
-        report = f' Report: {run.dir}' if run else ''
-        if run:
-            counts = run.counts()
-            already = counts.get('already_saved', 0)
-            saved = counts.get('saved', 0)
-            if already:
-                report = f' {already} already saved.' + report
-            if stopped:
-                not_started = counts.get('stopped', 0)
-                self.status_var.set(f'Stopped. {saved} saved, {not_started} not started.{report}')
-                self.root.title(f'Stopped - {APP_TITLE}')
-                return
-        if not errors:
-            self.status_var.set(f'Done. {saved} saved.{report}')
+        self.export_btn.state(['!disabled'] if run else ['disabled'])
+        failed = self.table.count('failed')
+        self.retry_btn.configure(text=f'Retry failed ({failed})')
+        if failed:
+            self.retry_btn.grid()
+        else:
+            self.retry_btn.grid_remove()
+        counts = run.counts() if run else {}
+        saved = counts.get('saved', len(urls) - len(errors))
+        already = counts.get('already_saved', 0)
+        extra = f' {already} already saved.' if already else ''
+        if stopped:
+            self.status_var.set(f'Stopped. {saved} saved, {counts.get("stopped", 0)} not started.{extra}')
+            self.root.title(f'Stopped - {APP_TITLE}')
+        elif not errors:
+            self.status_var.set(f'Done. {saved} saved.{extra}')
             self.root.title(f'Done: {saved} saved - {APP_TITLE}')
-            return
-        self.status_var.set(f'Done. {saved} saved, {len(errors)} failed. '
-                            f'Select Retry failed to try them again.{report}')
-        self.root.title(f'Done: {saved} saved, {len(errors)} failed - {APP_TITLE}')
+        else:
+            self.status_var.set(f'Done. {saved} saved, {len(errors)} failed.{extra} '
+                                'Select Retry failed to try them again.')
+            self.root.title(f'Done: {saved} saved, {len(errors)} failed - {APP_TITLE}')
+        self._focus_after_run()
 
-        infos = [(url, errors_mod.ErrorInfo(r.error_kind or errors_mod.UNKNOWN, r.error_message or '',
-                                            r.error_action, r.error_detail or '')) for url, r in errors]
         # sign-in errors only; limits and bot checks never lead to a sign-in prompt
         by_platform = {}
-        for (url, r), (_u, info) in zip(errors, infos):
+        for url, r in errors:
+            info = errors_mod.ErrorInfo(r.error_kind or errors_mod.UNKNOWN, r.error_message or '', r.error_action, '')
             if info.needs_signin and r.platform:
                 by_platform.setdefault(r.platform, []).append(url)
         platform_key = max(by_platform, key=lambda k: len(by_platform[k])) if by_platform else None
         platform = BY_KEY.get(platform_key) if platform_key else BY_HANDLER.get(source or '')
         auth_failed = by_platform.get(platform_key, [])
-        if platform and platform.cookie_domains and auth_failed:
+        if platform and platform.cookie_domains and auth_failed and not stopped:
             noun = 'link needs' if len(auth_failed) == 1 else 'links need'
-            reason = f'{len(auth_failed)} {noun} a {platform.name} sign-in.'
+            reason = f'{len(auth_failed)} {noun} {signins._a(platform.name)} {platform.name} sign-in.'
             if messagebox.askyesno('Sign-in needed', f'{reason} Sign in now?', parent=self.root):
-                sheet = SignInSheet(self.root, platform, reason=reason, retry_count=len(auth_failed),
-                                    on_retry=lambda: self.start_download(auth_failed),
-                                    on_change=self.refresh_signin_summary)
-                self.root.wait_window(sheet)
-                self.refresh_signin_summary()
-                return
+                self.fix_signin(platform, auth_failed, reason)
 
-        # one block per cause: "3 links: This post was deleted or the link is wrong."
-        blocks = []
-        for info, group_urls in errors_mod.group(infos)[:MAX_LISTED_ERRORS]:
-            noun = 'link' if len(group_urls) == 1 else 'links'
-            shown = '\n'.join(group_urls[:3]) + (f'\n...and {len(group_urls) - 3} more' if len(group_urls) > 3 else '')
-            blocks.append(f'{len(group_urls)} {noun}: {info.message}\n{shown}')
-        listed = '\n\n'.join(blocks) + f'\n\nDetails are in {logs.log_path()}.'
-        messagebox.showerror('Some downloads failed', listed, parent=self.root)
+    def _focus_after_run(self):
+        # the first failed row if any, else Open folder (brief 6.1)
+        first_failed = next((row.url for row in self.table.rows.values() if row.state == 'failed'), None)
+        if first_failed and self.table.tree.exists(first_failed):
+            self.table.tree.selection_set(first_failed)
+            self.table.tree.focus(first_failed)
+            self.table.tree.focus_set()
+
+    # --- queue actions ----------------------------------------------------------------
+    def fix_signin(self, platform, urls, reason=''):
+        handlers = [self.table.rows[u].handler for u in urls if u in self.table.rows]
+        sheet = SignInSheet(self.root, platform, reason=reason, retry_count=len(urls),
+                            on_retry=lambda: self.start_download(urls, handlers=handlers, keep_queue=True),
+                            on_change=self.refresh_signin_summary)
+        self.root.wait_window(sheet)
+        self.refresh_signin_summary()
+
+    def retry_failed(self):
+        if self._runner is not None:
+            return
+        links = self.table.failed_links()
+        if links:
+            self.start_download([u for u, _h in links], handlers=[h for _u, h in links], keep_queue=True)
+
+    def _row_file(self, row):
+        r = row.result
+        if r is None:
+            return None
+        if r.status == 'saved' and r.files and self._last_run:
+            media = [f for f in r.files if not f.path.endswith('.json')] or r.files
+            return Path(self._last_run.root) / media[0].path
+        previous = r.previous or {}
+        if r.status == 'already_saved' and previous.get('files'):
+            files = [f for f in previous['files'] if not f.endswith('.json')] or previous['files']
+            return Path(previous.get('output_root', '')) / files[0]
+        return None
+
+    def open_row(self, row):
+        path = self._row_file(row)
+        if path and path.exists():
+            open_folder(path)
+        elif row.state == 'failed' and row.result is not None and row.result.error_action == errors_mod.FIX_SIGNIN:
+            platform = BY_KEY.get(row.result.platform or '')
+            if platform:
+                self.fix_signin(platform, [row.url])
+
+    def open_output(self):
+        folder = self.dir_var.get()
+        if folder and os.path.isdir(folder):
+            open_folder(folder)
+
+    def _copy(self, text):
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text)
+
+    def row_menu(self, row, event):
+        running = self._runner is not None
+        menu = tk.Menu(self.root, tearoff=False)
+        path = self._row_file(row)
+        menu.add_command(label='Open file', state='normal' if path and path.exists() else 'disabled',
+                         command=lambda: open_folder(path))
+        menu.add_command(label='Open folder', state='normal' if path and path.parent.exists() else 'disabled',
+                         command=lambda: open_folder(path.parent))
+        menu.add_command(label='Copy link', command=lambda: self._copy(row.url))
+        if row.state == 'failed' and row.result is not None:
+            menu.add_command(label='Copy error', command=lambda: self._copy(
+                f'{row.result.error_message}\n{row.result.error_detail or ""}'.strip()))
+            platform = BY_KEY.get(row.result.platform or '')
+            if row.result.error_action == errors_mod.FIX_SIGNIN and platform:
+                menu.add_command(label='Fix sign-in', command=lambda: self.fix_signin(platform, [row.url]))
+        menu.add_separator()
+        can_retry = row.state in ('failed', 'stopped') and row.handler and not running
+        menu.add_command(label='Retry', state='normal' if can_retry else 'disabled',
+                         command=lambda: self.start_download([row.url], handlers=[row.handler], keep_queue=True))
+        can_again = row.state in ('saved', 'already_saved') and row.handler and not running
+        menu.add_command(label='Download again', state='normal' if can_again else 'disabled',
+                         command=lambda: self.start_download([row.url], handlers=[row.handler], keep_queue=True,
+                                                             force=True))
+        menu.add_command(label='Remove from list', state='disabled' if running else 'normal',
+                         command=self.remove_rows)
+        try:
+            x = event.x_root if event.x_root else self.table.tree.winfo_rootx() + 40
+            y = event.y_root if event.y_root else self.table.tree.winfo_rooty() + 40
+            menu.tk_popup(x, y)
+        finally:
+            menu.grab_release()
+
+    def remove_rows(self):
+        if self._runner is None:
+            self.table.remove([row.url for row in self.table.selected()])
+
+    def export_report(self):
+        run = self._last_run
+        if run is None or not run.finished:
+            return
+        target = filedialog.asksaveasfilename(parent=self.root, title='Export report', defaultextension='.html',
+                                              initialfile=f'report-{run.run_id}.html',
+                                              filetypes=[('Web page', '*.html')])
+        if not target:
+            return
+        include = messagebox.askyesno(
+            'Include account names?',
+            'The report leaves out the account names of the people in the posts, because a shared report could '
+            'put them at risk. Include them anyway?', parent=self.root, default='no')
+        path = report.export(run.dir, run.results, target, include_accounts=include)
+        self.status_var.set(f'Report saved: {path} (and {path.with_suffix(".csv").name}).')
+
+    # --- details log (brief F8) -------------------------------------------------------
+    def toggle_details(self):
+        if self.details.grid_info():  # placed in the layout, whether or not the window is on screen
+            self.details.grid_remove()
+            self.details_link.configure(text='Show details')
+            self.prefs['details_open'] = False
+        else:
+            self.details.grid(row=11, column=0, sticky='ew', pady=(8, 0))
+            self.details_link.configure(text='Hide details')
+            self.prefs['details_open'] = True
+
+    def _drain_log(self):
+        lines = []
+        try:
+            while True:
+                lines.append(self._log_lines.get_nowait())
+        except queue.Empty:
+            pass
+        if not lines:
+            return
+        self.details.configure(state='normal')
+        self.details.insert('end', '\n'.join(lines) + '\n')
+        excess = int(self.details.index('end-1c').split('.')[0]) - MAX_LOG_LINES
+        if excess > 0:
+            self.details.delete('1.0', f'{excess + 1}.0')
+        self.details.see('end')
+        self.details.configure(state='disabled')
 
 
 def confirm_stop(parent, waiting: int) -> bool:
