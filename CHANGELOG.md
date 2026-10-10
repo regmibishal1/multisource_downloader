@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.3.1 (2026-10-10)
+
+Fixes found by testing every platform by hand, and security updates.
+
+### Fixed
+
+- **Google Drive** downloads failed in the window and in the Windows app ("'NoneType' object has no
+  attribute 'write'"): without a console, gdown's progress bar had nowhere to write.
+- **Instagram** posts failed after an Instagram change: Instaloader 4.15.3 fixes it. When Instaloader
+  fails for a reason other than the sign-in or the post, the app now tries yt-dlp with the same
+  sign-in, then gallery-dl for photo posts. A post could also sit at 0 % without explanation: requests
+  now time out after 30 s, short "slow down" waits are logged and end on Stop, and long ones show as a
+  rate limit with a countdown while the other platforms carry on.
+- **TikTok** refused yt-dlp's default browser identity. TikTok links now send the User-Agent of the
+  Firefox installed on your computer: your real browser's, the same every time.
+- **Threads** links said "Threads changed something". Neither yt-dlp nor gallery-dl reads Threads, so
+  they now say Threads posts cannot be downloaded yet.
+- Clearer errors: "needs an update" when a downloader no longer understands a site, "blocked in your
+  region" for posts blocked for your IP address, and Instagram photo posts reach gallery-dl.
+- Dark mode: radio buttons and checkboxes show their dot and tick; hovered column headings are readable.
+- The queue no longer collapses at 150 % display scaling.
+- Retry failed counts only failures a retry can fix.
+- A run that stopped early now anchors its custody log when you Resume or Dismiss it.
+- The download scheduler no longer waits up to 0.2 s between links for no reason.
+
+### Changed
+
+- Google Drive "Connect with your own Google Cloud project" uses Google's own libraries (google-auth)
+  instead of PyDrive2, and asks only for read-only access. Downloads are checked against the MD5 Drive
+  gives. Connections saved by older versions still work.
+- The daily update check covers Instaloader too.
+- The Bluesky row in Sign-ins says there is nothing to sign in to.
+
+### Security
+
+- Updated urllib3, requests, httplib2, idna, pyasn1, protobuf, soupsieve, filelock and setuptools for
+  open security alerts. Replacing PyDrive2 removed cryptography and pyOpenSSL, whose alerts its pins
+  had blocked. No open security alerts remain.
+
 ## 0.3.0 (2026-10-10)
 
 The first release of the redesigned app: one window for every platform, plain-language errors,
