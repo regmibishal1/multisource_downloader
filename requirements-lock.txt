@@ -61,7 +61,7 @@ soupsieve==2.8
 tqdm==4.67.1
 typing_extensions==4.15.0
 uritemplate==4.2.0
-urllib3==2.5.0
+urllib3==2.8.0
 websockets==17.2
 yt-dlp==2026.8.19
 yt-dlp-ejs==0.8.0
