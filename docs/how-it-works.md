@@ -11,7 +11,7 @@ and cannot prove, so that someone who collected material with it can explain the
    the manifest.
 2. **Download into staging.** The link is downloaded into `_staging/<run>_<job>/` inside the download
    folder by one program:
-   - **yt-dlp** (YouTube, X, TikTok, Threads, Reddit, Facebook) asks the platform for the post and
+   - **yt-dlp** (YouTube, X, TikTok, Reddit, Facebook) asks the platform for the post and
      saves the media file the platform serves. When the best video and the best audio are separate
      streams, yt-dlp joins them with ffmpeg into one file without re-encoding (the streams are copied
      as they are), and the manifest records `"merged": true` with the format ids, for example
@@ -19,7 +19,14 @@ and cannot prove, so that someone who collected material with it can explain the
      streams. With **Keep files exactly as the platform served them** (on by default) yt-dlp does not
      repair or remux the file after download, so its bytes are what the platform sent; **Also keep
      the separate video and audio streams** saves those too.
-   - **Instaloader** (Instagram) saves the photos and videos of the post as served.
+   - For TikTok, which refuses yt-dlp's default browser identity (its User-Agent), the app sends the
+     User-Agent of the Firefox installed on your computer: your real browser's, the same every time.
+   - **Threads**: neither yt-dlp nor gallery-dl reads Threads posts yet, so the app says so for each
+     Threads link instead of trying.
+   - **Instaloader** (Instagram) saves the photos and videos of the post as served. If it fails for a
+     reason other than the sign-in or the post itself (Instagram changes its API often), yt-dlp tries
+     the same link with the same sign-in, and gallery-dl after it for photo posts. The manifest's
+     `backend` says which program saved each post.
    - **gdown** (Google Drive) saves the file exactly as stored in Drive. With your own Google Cloud
      connection, the app reads the file through Google's Drive API with Google's own sign-in
      libraries (google-auth), and checks it against the MD5 checksum Drive gives for it.

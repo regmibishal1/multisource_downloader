@@ -589,7 +589,7 @@ class UnfinishedRun:
         noun = 'link was' if n == 1 else 'links were'
         return f'Your last run stopped before it finished. {n} {noun} not done.'
 
-    def close(self, how: str, by_run: Optional[str] = None) -> None:
+    def close(self, how: str, by_run: Optional[str] = None, anchor_path: Optional[Path] = None) -> None:
         """Mark the old run handled ("resumed" or "dismissed") so it is not offered again."""
         path = self.run_dir / PLAN_FILENAME
         try:
@@ -598,6 +598,13 @@ class UnfinishedRun:
             plan = {}
         plan.update({'closed': how, 'closed_at': utc_now(), 'resumed_by': by_run})
         _write_json_atomic(path, plan)
+        # it never reached run_finished, which is where the head is normally anchored (13.4, A1)
+        log = self.run_dir / CUSTODY_FILENAME
+        if anchor_path and log.exists():
+            try:
+                CustodyLog(log, self.run_id, anchor_path=anchor_path).anchor_local()
+            except (OSError, ValueError) as exc:  # a damaged log is reported by verify, never added to
+                _log.warning('Could not anchor the custody log of %s: %s', self.run_id, exc)
 
 
 def last_unfinished_run(pointer: Optional[Path] = None) -> Optional[UnfinishedRun]:

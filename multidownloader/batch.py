@@ -388,7 +388,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         parallel=args.parallel,
     )
     if args.resume and unfinished and result['run_dir']:
-        unfinished.close('resumed', by_run=Path(result['run_dir']).name)
+        unfinished.close('resumed', by_run=Path(result['run_dir']).name, anchor_path=custody.default_anchor_path())
 
     logger.info('Attempted: %s, completed: %s, already saved: %s, skipped: %s, errors: %s', result['attempted'],
                 len(result['completed']), len(result['already_saved']), len(result['skipped']), len(result['errors']))

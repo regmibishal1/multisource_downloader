@@ -9,11 +9,11 @@ import time
 from pathlib import Path
 
 try:
-    from instaloader import Instaloader, Post
+    from instaloader import Instaloader, Post, RateController
+    from instaloader.exceptions import TooManyRequestsException
     INSTALOADER_AVAILABLE = True
 except Exception:  # pragma: no cover - instaloader optional
-    Instaloader = None
-    Post = None
+    Instaloader = Post = RateController = TooManyRequestsException = None
     INSTALOADER_AVAILABLE = False
 
 from .. import session_store, signins
@@ -25,6 +25,55 @@ INSTAGRAM_PASSWORD_NOTE = ('Not recommended. Instagram is more likely to lock ac
                            'Instagram and is not saved.')
 CHECKPOINT_MESSAGE = ('Instagram wants you to confirm this sign-in. '
                       'Open Instagram in your browser, approve it, then try again.')
+
+# Instaloader's defaults (300 s per request, 3 attempts) can leave one link waiting 15 minutes on a stalled
+# connection; and when Instagram asks it to slow down it sleeps, sometimes for many minutes, with a note only on
+# a console the window does not have, and without noticing Stop.
+REQUEST_TIMEOUT_S = 30.0
+# a wait longer than this becomes a rate limit the runner handles: Instagram is paused with "Waiting mm:ss" in
+# the queue, the other platforms carry on, and the link is tried once more later
+MAX_WAIT_S = 60.0
+RATE_LIMITED_MESSAGE = 'Too many requests: Instagram asked the app to wait {seconds} s before the next one.'
+
+
+def new_loader(**kwargs):
+    return Instaloader(request_timeout=REQUEST_TIMEOUT_S, **kwargs)
+
+
+if INSTALOADER_AVAILABLE:
+    class AppRateController(RateController):
+        """Instaloader's waits, done the app's way: logged, stoppable, and handed back when long."""
+
+        def __init__(self, context, cancel_event=None, logger=None):
+            super().__init__(context)
+            self.cancel_event = cancel_event
+            self.logger = logger or logging.getLogger(__name__)
+
+        def sleep(self, secs):
+            if secs > MAX_WAIT_S:
+                raise TooManyRequestsException(RATE_LIMITED_MESSAGE.format(seconds=int(secs)))
+            if secs >= 1:
+                self.logger.info('Instagram asked the app to slow down: waiting %d s', secs)
+            end = time.monotonic() + secs
+            while True:
+                left = end - time.monotonic()
+                if left <= 0:
+                    return
+                if self.cancel_event is not None and self.cancel_event.is_set():
+                    raise RuntimeError('Stopped')
+                time.sleep(min(0.5, left))
+
+
+def tune(loader, cancel_event=None, logger=None) -> None:
+    """Per download: the app's rate controller, and Instaloader's messages in the app's log."""
+    log = logger or logging.getLogger(__name__)
+    context = getattr(loader, 'context', None)
+    if not hasattr(context, '_rate_controller'):
+        return  # not Instaloader's own context (a stand-in): nothing to tune
+    context._rate_controller = AppRateController(context, cancel_event, log)
+    context.error = lambda msg, repeat_at_end=True: log.warning('Instaloader: %s', msg)
+    context.quiet = True  # its progress lines would go to a console the window does not have
+
 
 # Matches /p/, /reel/, /reels/ and /tv/ links, with or without a leading
 # /<username>/ segment (a common share format).
@@ -87,7 +136,7 @@ class InstagramHandler:
             TwoFactorAuthRequiredException,
         )
 
-        loader = Instaloader()
+        loader = new_loader()
         try:
             try:
                 loader.login(username, password)
@@ -148,6 +197,7 @@ class InstagramHandler:
         cancel = options.get('cancel_event')
         if cancel is not None and cancel.is_set():
             raise RuntimeError('Stopped before it started.')
+        tune(loader, cancel, self.logger)
         shortcode = parse_shortcode(url)
         if not shortcode:
             raise ValueError('Invalid Instagram link')
@@ -174,7 +224,12 @@ class InstagramHandler:
                     loader.download_post(post, target=shortcode)
                     self.logger.info('Downloaded Instagram post: %s', shortcode)
                     return True
+                except TooManyRequestsException as exc:
+                    raise RuntimeError(str(exc) if 'Too many requests' in str(exc) else
+                                       RATE_LIMITED_MESSAGE.format(seconds='several')) from exc
                 except Exception as exc:
+                    if cancel is not None and cancel.is_set():
+                        raise RuntimeError('Stopped') from exc
                     message = str(exc)
                     self.logger.warning('Attempt %s failed for %s: %s', attempt, shortcode, message)
                     if 'login' in message.lower() or 'authenticate' in message.lower():
@@ -202,7 +257,7 @@ class InstagramHandler:
             if auth_mode == 'authenticated':
                 raise RuntimeError('No saved Instagram session found. Run Instagram authentication first.')
 
-        return Instaloader()
+        return new_loader()
 
     def _loader_from_signin(self):
         """Build an Instaloader from the shared cookie sign-in, checked once per handler."""
@@ -213,7 +268,7 @@ class InstagramHandler:
         if self._signin_loader and self._signin_loader[0] == stamp:
             return self._signin_loader[1]
         user_agent = signins.user_agent_for('Instagram')
-        loader = Instaloader(user_agent=user_agent) if user_agent else Instaloader()
+        loader = new_loader(user_agent=user_agent) if user_agent else new_loader()
         jar = loader.context._session.cookies
         for c in signins.read_cookies(BY_KEY['instagram']):
             jar.set(c.name, c.value, domain=c.domain, path=c.path)
@@ -237,7 +292,7 @@ class InstagramHandler:
     def _load_cached_client(self):
         username, session_path = self._cached_session_info()
         if username and session_path and session_path.exists():
-            loader = Instaloader()
+            loader = new_loader()
             loader.load_session_from_file(username, session_path)
             return loader
         return None

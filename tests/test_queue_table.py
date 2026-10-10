@@ -150,6 +150,17 @@ class QueueWindowTests(unittest.TestCase):
         self.assertEqual({}, self.table.rows)
         self.assertIn('Nothing in the queue yet', self.table.empty.cget('text'))
 
+    def test_window_never_squeezes_the_queue(self):
+        # at any display scaling the minimum size leaves room for every control and the queue's rows
+        self.root.update_idletasks()
+        min_w, min_h = self.root.minsize()
+        self.assertGreaterEqual(min_h, self.app.frm.winfo_reqheight())
+        self.assertGreaterEqual(min_w, self.app.frm.winfo_reqwidth())
+        self.assertEqual(6, int(self.table.tree.cget('height')))
+        before = min_h
+        self.app.toggle_details()
+        self.assertGreater(self.root.minsize()[1], before)  # the log gets room as well
+
     def test_details_log(self):
         import logging
         self.assertFalse(self.app.details.grid_info())

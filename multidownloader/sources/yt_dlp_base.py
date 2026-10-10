@@ -27,6 +27,11 @@ from ..platforms import BY_HANDLER
 # failures) unless asked for, and then cut to 60 characters. yt-dlp names the
 # .info.json and thumbnail after the media, so they sit next to it.
 ACCOUNT_FIELD = '%(uploader,channel,uploader_id,creator|unknown)s'
+# Instagram: yt-dlp keeps the handle in "channel" and the display name in "uploader". The handle is what
+# Instaloader names the folder, so an account gets one folder whichever program saved the post.
+ACCOUNT_FIELDS = {'instagram': '%(channel,uploader_id,uploader|unknown)s'}
+# platforms that refuse yt-dlp's default browser identity; they get the user's own Firefox's
+OWN_BROWSER_AGENT = {'tiktok'}
 DATE_FIELD = '%(upload_date>%Y-%m-%d,epoch>%Y-%m-%d)s'
 TITLE_LENGTH = 60
 
@@ -36,7 +41,8 @@ def layout_template(platform_key: str, include_title: bool = False, layout: str 
     name = f'{DATE_FIELD}_%(id)s%(playlist_index&_{{}}|)s'
     if include_title:
         name += f'_%(title).{TITLE_LENGTH}s'
-    folders = {'account': f'{platform_key}/{ACCOUNT_FIELD}/', 'platform': f'{platform_key}/', 'flat': ''}
+    account = ACCOUNT_FIELDS.get(platform_key, ACCOUNT_FIELD)
+    folders = {'account': f'{platform_key}/{account}/', 'platform': f'{platform_key}/', 'flat': ''}
     return f'{folders.get(layout, folders["account"])}{name}.%(ext)s'
 
 
@@ -251,6 +257,12 @@ class YtDlpHandler:
             if user_agent:
                 base_opts['http_headers'] = {'User-Agent': user_agent}
 
+        if 'http_headers' not in base_opts and self.platform_key in OWN_BROWSER_AGENT:
+            # TikTok refuses the Chrome identities yt-dlp sends by default (yt-dlp issue 17604) but accepts
+            # the user's own installed Firefox: send exactly that, never a made-up or rotating one
+            own = signins.own_firefox_user_agent()
+            if own:
+                base_opts['http_headers'] = {'User-Agent': own}
         custom = options.get('ytdlp_opts') or {}
         has_ffmpeg = ffmpeg_available(custom.get('ffmpeg_location'))
         quality = QUALITY_FORMATS.get(options.get('quality') or 'best')

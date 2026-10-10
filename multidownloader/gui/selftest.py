@@ -68,6 +68,9 @@ def expected_components() -> List[str]:
 
 
 def _components() -> str:
+    # without a console sys.stdout/stderr are None and any library that prints fails (gdown did)
+    if sys.stdout is None or sys.stderr is None:
+        raise RuntimeError('there is nowhere to write output: libraries that print would fail')
     import yt_dlp
     found = [f'yt-dlp {yt_dlp.version.__version__}']
     try:

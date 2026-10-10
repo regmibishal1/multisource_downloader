@@ -113,6 +113,7 @@ _OWN_MESSAGES: Tuple[Tuple[str, str, Optional[str]], ...] = (
     ('Google Drive sign-in needs gdown 6 or newer', MISSING_COMPONENT, HOW_TO_UPDATE),
     ('The download finished but no file was saved.', NO_MEDIA, None),
     ('Image posts from Threads are not supported yet.', UNSUPPORTED, COPY_LINK),
+    ('Threads posts cannot be downloaded yet', UNSUPPORTED, COPY_LINK),
     ('gallery-dl is not installed.', MISSING_COMPONENT, HOW_TO_FIX),
     ('yt-dlp is not installed.', MISSING_COMPONENT, HOW_TO_FIX),
     ('Instaloader is not installed.', MISSING_COMPONENT, HOW_TO_FIX),
@@ -127,21 +128,25 @@ _TEXT_RULES: Tuple[Tuple[str, str], ...] = (
     (r'invalid_grant', OAUTH_EXPIRED),
     (r'http error 429|too many requests|rate[- ]limit|toomanyrequests|please wait a few minutes|'
      r'too many users have viewed', RATE_LIMITED),
-    (r'available in your (country|region)|geo[- ]?restrict|blocked in your (country|region)', GEO_BLOCKED),
+    (r'available in your (country|region)|geo[- ]?restrict|blocked in your (country|region)|'
+     r'ip address is blocked from accessing', GEO_BLOCKED),
     (r'private video|this account is private|is private|privateprofilenotfollowed', PRIVATE),
     (r'login required|log in to|sign in to (confirm your age|view)|requires authentication|loginrequired|'
      r'not logged in|cookies? (are|is) (needed|required)|use --cookies', AUTH_REQUIRED),
     (r'javascript runtime|\bejs\b|yt-dlp-ejs|(ffmpeg|ffprobe|deno)( is)? not (installed|found)', MISSING_COMPONENT),
-    (r'no video could be found|no video formats found|there.s no video in this|no media found', NO_MEDIA),
+    (r'no video could be found|no video formats found|there.s no video in this|there is no video in this|'
+     r'no media found', NO_MEDIA),
     (r'unsupported url|no suitable extractor', UNSUPPORTED),
     (r'http error 404|not found|could not be found|video unavailable|this video is unavailable|has been removed|post not found|'
      r'does not exist|this tweet is unavailable|deleted', NOT_FOUND),
     (r'unable to extract|unable to download json metadata|failed to parse|signature extraction failed|'
-     r'nsig extraction failed', OUTDATED),
+     r'nsig extraction failed|json query to graphql|expecting value: line 1 column 1', OUTDATED),
     (r'getaddrinfo|name or service not known|timed out|timeout|connection (reset|refused|aborted)|'
      r'network is unreachable|temporary failure in name resolution|remote end closed|'
      r'connectionerror|ssl: |urlopen error', NETWORK),
     (r'http error 403', RATE_LIMITED),
+    # yt-dlp's own words when a site changed and the extractor no longer understands it
+    (r'please report this issue on|confirm you are on the latest version', OUTDATED),
 )
 
 _TYPE_RULES: Tuple[Tuple[str, str], ...] = (

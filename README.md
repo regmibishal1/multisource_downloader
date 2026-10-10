@@ -1,7 +1,7 @@
 Multisource Downloader
 ======================
 
-Save posts, videos and photos from YouTube, X (Twitter), Instagram, Threads, TikTok, Facebook, Reddit, Google Drive and Bluesky, from a list of links. It is built for archiving: every run records where each file came from, when, and its SHA-256, and links saved before are never downloaded twice.
+Save posts, videos and photos from YouTube, X (Twitter), Instagram, TikTok, Facebook, Reddit, Google Drive and Bluesky, from a list of links (Threads links are recognised, but cannot be downloaded yet). It is built for archiving: every run records where each file came from, when, and its SHA-256, and links saved before are never downloaded twice.
 
 There is a window (with a simple view for one link at a time) and a command line for long lists.
 
@@ -105,7 +105,7 @@ What each run saves
 - To check later that nothing changed, run `msdl verify <download folder>\_runs\<run id>` (or a package folder): it re-hashes every file and says "All 214 files match." or lists the changed and missing ones (exit code 0 or 1). `--custody` also checks the custody log against its anchors. `sha256sum -c _runs/<run id>/SHA256SUMS.txt` from the download folder works too.
 - Links saved in earlier runs, even shared in another format, are recorded as "already saved". The list is `history.sqlite` in your user data folder.
 
-Supported platforms and what downloads them: YouTube, X, TikTok, Threads, Reddit and Facebook with yt-dlp; Instagram with Instaloader; Google Drive with gdown and, for your own Google Cloud connection, Google's own libraries (google-auth); Bluesky and image posts (photo-only X posts, Reddit, TikTok and Facebook photo posts) with gallery-dl. Image-only Threads posts are not supported yet.
+Supported platforms and what downloads them: YouTube, X, TikTok, Reddit and Facebook with yt-dlp (for TikTok, which refuses yt-dlp's default browser identity, the app sends the User-Agent of the Firefox installed on your computer); Instagram with Instaloader (and yt-dlp, then gallery-dl, when Instaloader cannot read a post); Google Drive with gdown and, for your own Google Cloud connection, Google's own libraries (google-auth); Bluesky and image posts (photo-only X posts, Reddit, TikTok and Facebook photo posts) with gallery-dl. Threads posts cannot be downloaded yet: neither yt-dlp nor gallery-dl reads them. The app says so for each Threads link, and uses yt-dlp as soon as a release adds Threads.
 
 Troubleshooting
 ---------------

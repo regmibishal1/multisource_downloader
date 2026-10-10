@@ -377,7 +377,7 @@ class DownloaderUI:
             self.links.configure(height=3)
             self.simple_row.grid(row=12, column=0, sticky='ew', pady=(px(8), 0))
             self.frm.rowconfigure(8, weight=0)
-            self.root.minsize(px(480), px(300))
+            self._fit_minsize(px(480), px(300))
             self.root.geometry(f'{px(560)}x{px(300)}')
         else:
             self.simple_row.grid_remove()
@@ -386,9 +386,14 @@ class DownloaderUI:
             self.frm.rowconfigure(8, weight=1)
             if self.prefs.get('details_open'):
                 self.details.grid(row=11, column=0, sticky='ew', pady=(px(8), 0))
-            self.root.minsize(px(760), px(560))
+            self._fit_minsize(px(760), px(560))
             self.root.geometry(self.prefs.get('window_geometry') or f'{px(960)}x{px(680)}')
         self._show_stop()
+
+    def _fit_minsize(self, width: int, height: int):
+        """The window can never get smaller than what its content needs at this display scaling."""
+        self.root.update_idletasks()
+        self.root.minsize(max(width, self.frm.winfo_reqwidth()), max(height, self.frm.winfo_reqheight()))
 
     def toggle_view(self):
         self.set_view('full' if self.view == 'simple' else 'simple')
@@ -641,7 +646,7 @@ class DownloaderUI:
 
     def dismiss_unfinished(self):
         if self.unfinished:
-            self.unfinished.close('dismissed')
+            self.unfinished.close('dismissed', anchor_path=custody.default_anchor_path())
         self.unfinished = None
         self.resume_bar.grid_remove()
 
@@ -728,7 +733,7 @@ class DownloaderUI:
         self.package_btn.state(['disabled'])
         self.retry_btn.grid_remove()
         if resumed:
-            resumed.close('resumed', by_run=run.run_id)
+            resumed.close('resumed', by_run=run.run_id, anchor_path=custody.default_anchor_path())
 
         # everything the worker needs was read above: it must not read Tk variables
         self.save_prefs()
@@ -861,7 +866,7 @@ class DownloaderUI:
         self.refresh_signin_summary()
         self.export_btn.state(['!disabled'] if run else ['disabled'])
         self.package_btn.state(['!disabled'] if run else ['disabled'])
-        failed = self.table.count('failed')
+        failed = len(self.table.failed_links())  # only the ones a retry can fix
         self.retry_btn.configure(text=f'Retry failed ({failed})')
         if failed:
             self.retry_btn.grid()
@@ -1112,6 +1117,8 @@ class DownloaderUI:
             self.details.grid(row=11, column=0, sticky='ew', pady=(px(8), 0))
             self.details_link.configure(text='Hide details')
             self.prefs['details_open'] = True
+        if self.view == 'full':
+            self._fit_minsize(px(760), px(560))  # the log needs room too
 
     def _drain_log(self):
         lines = []
@@ -1189,7 +1196,20 @@ def start_view(args, prefs) -> str:
     return 'simple' if getattr(sys, 'frozen', False) else 'full'
 
 
+def ensure_std_streams() -> None:
+    """Give Python somewhere to write when there is no console.
+
+    Started with pythonw, or as the windowed Windows app, sys.stdout and sys.stderr are None, and a
+    library that prints (gdown's progress bar, for one) fails with "'NoneType' object has no attribute
+    'write'". Their output goes nowhere instead; the app's own log is unaffected.
+    """
+    for name in ('stdout', 'stderr'):
+        if getattr(sys, name) is None:
+            setattr(sys, name, open(os.devnull, 'w', encoding='utf-8'))
+
+
 def main(argv=None):
+    ensure_std_streams()
     argv = sys.argv[1:] if argv is None else list(argv)
     if argv[:1] == ['--signin-window']:
         # the Windows app runs the sign-in window as a second copy of itself

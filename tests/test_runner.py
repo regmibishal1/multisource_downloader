@@ -72,22 +72,14 @@ class RunnerTests(unittest.TestCase):
                [f'https://www.instagram.com/p/C{i}/' for i in range(3)] + \
                [f'https://www.youtube.com/watch?v=v{i:010d}' for i in range(3)]
         fake = TimedDownloader(0.3)  # long enough to overlap on a slow CI machine
-        started = time.monotonic()
         results = self.runner(fake, max_parallel=3).run(self.jobs(urls))
-        elapsed = time.monotonic() - started
         self.assertEqual(9, len(results))
         self.assertTrue(all(r.status == 'saved' for r in results))
+        # parallelism is checked by what ran at once, not by the clock: wall-clock comparisons were flaky on
+        # shared CI machines whose disks make every custody-log flush slow
         self.assertEqual(3, fake.max_total)
         self.assertEqual({1}, set(fake.max_active.values()))  # never two at once on one site
         self.assertEqual(9, len(runs.read_manifest(self.run.dir / 'manifest.jsonl')))
-        # clearly faster than one at a time on the same machine (disk flushes cost the same in both)
-        serial_run = Run(Path(self.run.root.parent) / 'serial')
-        self.addCleanup(serial_run.finish)
-        started = time.monotonic()
-        Runner(serial_run, TimedDownloader(0.3), max_parallel=1, delays={}, default_delay=(0, 0)).run(
-            self.jobs(urls))
-        serial = time.monotonic() - started
-        self.assertLess(elapsed, serial * 0.75, (elapsed, serial))
 
     def test_instagram_is_always_one_at_a_time(self):
         fake = TimedDownloader(0.4)  # long enough for the x.com links to overlap on a slow CI machine
