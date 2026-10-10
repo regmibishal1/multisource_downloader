@@ -1009,6 +1009,9 @@ def parse_args(argv=None):
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--simple', action='store_true', help='Open the simple view: one link box and Download')
     group.add_argument('--full', action='store_true', help='Open the full view with the queue')
+    parser.add_argument('--self-test', action='store_true',
+                        help='Check this build works (hidden window, fake download and sign-in) and exit')
+    parser.add_argument('--report', metavar='FILE', help='With --self-test: write the result to FILE')
     return parser.parse_args(argv)
 
 
@@ -1024,7 +1027,16 @@ def start_view(args, prefs) -> str:
 
 
 def main(argv=None):
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if argv[:1] == ['--signin-window']:
+        # the Windows app runs the sign-in window as a second copy of itself
+        from multidownloader.gui import signin_window
+        sys.exit(signin_window.main(argv[1:]))
     args = parse_args(argv)
+    if args.self_test:
+        # before logs.setup and the sign-in move, which would touch the user's data folder
+        from multidownloader.gui import selftest
+        sys.exit(selftest.run(DownloaderUI, report=args.report))
     # one rotating, redacted log file in the per-user log folder (brief T15)
     logs.setup()
     session_store.migrate_legacy_sessions()

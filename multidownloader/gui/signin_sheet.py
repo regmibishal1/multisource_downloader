@@ -266,8 +266,11 @@ class SignInSheet(tk.Toplevel):
         parent = self.master.winfo_toplevel()
         x = parent.winfo_rootx() + max(0, (parent.winfo_width() - 480) // 2)
         y = parent.winfo_rooty() + 40
-        cmd = [sys.executable, '-m', 'multidownloader.gui.signin_window', '--platform', self.platform.key,
-               '--out', out, '--x', str(x), '--y', str(y)]
+        if getattr(sys, 'frozen', False):
+            cmd = [sys.executable, '--signin-window']
+        else:
+            cmd = [sys.executable, '-m', 'multidownloader.gui.signin_window']
+        cmd += ['--platform', self.platform.key, '--out', out, '--x', str(x), '--y', str(y)]
         root = Path(__file__).resolve().parents[2]  # so -m finds the package when run from source
         flags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
         try:

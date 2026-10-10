@@ -39,3 +39,30 @@ jobs:
         run: python -m ruff check .
       - name: Test
         run: python -m unittest discover -s tests -p "test_*.py" -v
+
+  windows-app:
+    # brief Q2: build the Windows app and check the frozen build itself
+    name: Windows app build and self-test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install
+        run: python -m pip install ".[all]" pyinstaller
+      - name: Build
+        run: python scripts/build_exe.py
+      - name: Self-test the built app
+        shell: pwsh
+        run: |
+          $exe = "dist\MultisourceDownloader\MultisourceDownloader.exe"
+          $p = Start-Process -FilePath $exe -ArgumentList "--self-test", "--report", "self-test.txt" -Wait -PassThru
+          Get-Content self-test.txt
+          if ($p.ExitCode -ne 0) { throw "self-test failed with exit code $($p.ExitCode)" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MultisourceDownloader-windows
+          path: dist/MultisourceDownloader-*-windows.zip
+          retention-days: 14
