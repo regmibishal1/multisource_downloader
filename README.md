@@ -22,7 +22,7 @@ Simple view and the Windows app
 
 The window has a simple view: one box for a link, Save to, Download, and a one-line result with **Open folder**. Start it with `--simple`, or switch any time from the **?** menu (Ctrl+Shift+V); "switch to full view" brings back the queue, sign-ins and options. The app remembers the view you used last.
 
-The Windows app (`scripts/build_exe.py`, which needs `pip install pyinstaller`) is this same window. It opens in the simple view the first time, so it replaces the old portable YouTube app and downloads from every supported platform. If you used the portable app with a YouTube cookies file, add it once in **Sign-ins**, YouTube, "Import a cookies file"; the old copy is in `%LOCALAPPDATA%\multisource-downloader\portable\cookies.txt`.
+The Windows app (`scripts/build_exe.py`, which needs `pip install pyinstaller`) is this same window, in a folder with `LICENSE` and `THIRD_PARTY_LICENSES.txt` (the license of every bundled package; gallery-dl is never bundled). `MultisourceDownloader.exe --self-test --report self-test.txt` checks a build without the network or your data: a hidden window, one fake download with its manifest, a fake sign-in saved and removed, and the bundled components. CI builds the app and runs this on every pull request. It opens in the simple view the first time, so it replaces the old portable YouTube app and downloads from every supported platform. If you used the portable app with a YouTube cookies file, add it once in **Sign-ins**, YouTube, "Import a cookies file"; the old copy is in `%LOCALAPPDATA%\multisource-downloader\portable\cookies.txt`.
 
 Quick start
 -----------

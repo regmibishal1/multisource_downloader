@@ -7,13 +7,17 @@ environment (it is a build tool, not a runtime dependency):
     python -m pip install pyinstaller
     python scripts/build_exe.py
 
-The result is dist/MultisourceDownloader/ and dist/MultisourceDownloader-<version>-windows.zip.
-gallery-dl is not bundled: it is GPL-2.0 and the app only runs it as a separate
-program when it is installed.
+The result is dist/MultisourceDownloader/ and dist/MultisourceDownloader-<version>-windows.zip,
+with LICENSE, README.md and THIRD_PARTY_LICENSES.txt next to the exe. gallery-dl
+is not bundled: it is GPL-2.0 and the app only runs it as a separate program
+when it is installed. Check a build with:
+
+    dist\MultisourceDownloader\MultisourceDownloader.exe --self-test --report self-test.txt
 """
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import shutil
 import sys
 import zipfile
@@ -21,6 +25,22 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 NAME = 'MultisourceDownloader'
+
+# optional parts bundled when installed in the build environment: module, PyInstaller options
+OPTIONAL = {
+    'instaloader': ['--collect-submodules=instaloader', '--copy-metadata=instaloader'],
+    # gdown reads its own version from the package metadata when imported
+    'gdown': ['--collect-submodules=gdown', '--copy-metadata=gdown'],
+    'pydrive2': ['--collect-submodules=pydrive2', '--copy-metadata=PyDrive2'],
+    # "Sign in here": pywebview with its WebView2 files, and pythonnet on Windows
+    'webview': ['--collect-all=webview', '--copy-metadata=pywebview'],
+    'pythonnet': ['--collect-all=pythonnet', '--collect-all=clr_loader'],
+}
+COMPONENTS_FILE = 'components.txt'
+
+
+def optional_parts():
+    return [name for name in OPTIONAL if importlib.util.find_spec(name) is not None]
 
 
 def version() -> str:
@@ -31,6 +51,8 @@ def version() -> str:
 
 def build(clean: bool = True) -> Path:
     import PyInstaller.__main__
+
+    parts = optional_parts()
 
     dist = ROOT / 'dist'
     work = ROOT / 'build'
@@ -47,13 +69,23 @@ def build(clean: bool = True) -> Path:
         '--collect-submodules=yt_dlp',
         '--collect-data=yt_dlp_ejs',
         '--collect-submodules=multidownloader',
+        '--exclude-module=gallery_dl',  # GPL-2.0: run as a separate program only, never bundled
+        '--copy-metadata=yt-dlp',
     ]
+    for name in parts:
+        args += OPTIONAL[name]
     if clean:
         args.append('--clean')
     PyInstaller.__main__.run(args)
     folder = dist / NAME
     for name in ('LICENSE', 'README.md'):
         shutil.copyfile(ROOT / name, folder / name)
+    # every bundled package's license, next to the exe (brief T19)
+    sys.path.insert(0, str(ROOT / 'scripts'))
+    import third_party_licenses
+    third_party_licenses.write(folder / 'THIRD_PARTY_LICENSES.txt')
+    # what --self-test must find in this build
+    (folder / COMPONENTS_FILE).write_text('\n'.join(p for p in parts if p != 'pythonnet') + '\n', encoding='utf-8')
     return folder
 
 
