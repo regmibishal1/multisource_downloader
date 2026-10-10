@@ -70,20 +70,51 @@ jobs:
           name: smoke-${{ matrix.deps }}
           path: smoke.*
           retention-days: 30
-      - name: Open or update the canary issue
-        if: steps.smoke.outputs.status == '1' && github.event_name != 'pull_request'
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $title = 'Canary: a platform stopped working'
-          $body = "**${{ matrix.deps }} downloaders**, run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`n`n" + (Get-Content smoke.md -Raw)
-          Set-Content -Path issue.md -Value $body -Encoding utf8
-          $open = gh issue list --state open --search "in:title $title" --json number --jq '.[0].number'
-          if ($open) { gh issue comment $open --body-file issue.md } else { gh issue create --title $title --body-file issue.md }
       - name: Fail when a platform broke
         if: steps.smoke.outputs.status != '0'
         shell: pwsh
         run: |
           Write-Output "Smoke test exit code ${{ steps.smoke.outputs.status }}: see the summary"
           exit 1
+
+  report:
+    # one issue update for both runs: two jobs opening it at the same moment could open two issues
+    name: Open or update the canary issue
+    needs: smoke
+    if: always() && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: smoke-*
+      - name: Report what broke
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REPO: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          sections, broken = [], False
+          for folder in sorted(pathlib.Path('.').glob('smoke-*')):
+              deps = folder.name.removeprefix('smoke-')
+              report = folder / 'smoke.json'
+              if not report.exists():
+                  broken = True
+                  sections.append(f'### {deps} downloaders\n\nThe smoke test did not finish: see the run.')
+                  continue
+              if not json.loads(report.read_text(encoding='utf-8')).get('ok'):
+                  broken = True
+                  sections.append(f'### {deps} downloaders\n\n' + (folder / 'smoke.md').read_text(encoding='utf-8'))
+          if not sections and not list(pathlib.Path('.').glob('smoke-*')):
+              broken = True
+              sections.append('No smoke test results were produced: see the run.')
+          body = f"Canary run {os.environ['RUN_URL']}\n\n" + '\n\n'.join(sections)
+          pathlib.Path('issue.md').write_text(body, encoding='utf-8')
+          pathlib.Path('broken').write_text('1' if broken else '0')
+          PY
+          if [ "$(cat broken)" != "1" ]; then echo "Every platform worked: nothing to report."; exit 0; fi
+          title='Canary: a platform stopped working'
+          open=$(gh issue list --repo "$REPO" --state open --search "in:title \"$title\"" --json number --jq '.[0].number')
+          if [ -n "$open" ]; then gh issue comment "$open" --repo "$REPO" --body-file issue.md
+          else gh issue create --repo "$REPO" --title "$title" --body-file issue.md; fi
