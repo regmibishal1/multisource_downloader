@@ -209,6 +209,19 @@ class OptionsWindowTests(unittest.TestCase):
             self.assertEqual(theme.DARK['surface'], str(app.links.cget('background')).upper())
             self.window(settings.defaults()).destroy()
 
+    def test_ticks_and_dots_are_visible_in_both_palettes(self):
+        from tkinter import ttk
+        for mode, palette in (('dark', theme.DARK), ('light', theme.LIGHT)):
+            with self.subTest(mode=mode), mock.patch.dict(theme.COLORS), mock.patch.dict(theme.STATE), \
+                    mock.patch.object(theme, 'high_contrast_on', return_value=False):
+                theme.apply(self.root, mode)
+                style = ttk.Style(self.root)
+                for name in ('TCheckbutton', 'TRadiobutton'):
+                    self.assertEqual(palette['accent'], str(style.lookup(name, 'indicatorforeground')).upper())
+                    self.assertEqual(palette['border'], str(style.lookup(name, 'upperbordercolor')).upper())
+                # the dot/tick colour against the indicator's background meets 3:1 (WCAG 1.4.11)
+                self.assertGreaterEqual(contrast(palette['accent'], palette['surface']), 3.0)
+
 
 if __name__ == '__main__':
     unittest.main()

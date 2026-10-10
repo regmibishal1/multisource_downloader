@@ -27,7 +27,7 @@ _log = logging.getLogger(__name__)
 
 STALE_DAYS = 45
 CHECK_EVERY_S = 24 * 3600
-PACKAGES = ('yt-dlp', 'gallery-dl')
+PACKAGES = ('yt-dlp', 'gallery-dl', 'instaloader')
 PYPI_URL = 'https://pypi.org/pypi/{name}/json'
 FILENAME = 'update_check.json'
 
@@ -81,7 +81,7 @@ def how_to_update(package: str) -> str:
     """What the user runs: a new app for the Windows app, else pip in the same Python."""
     if getattr(sys, 'frozen', False):
         return ('Download the newest Multisource Downloader from the Releases page on GitHub. '
-                'It includes the newest yt-dlp.')
+                'It includes the newest yt-dlp and Instaloader.')
     spec = '"yt-dlp[default]"' if package == 'yt-dlp' else package
     return f'"{sys.executable}" -m pip install -U {spec}'
 
@@ -122,6 +122,11 @@ def notices(versions: Dict[str, Optional[str]], latest: Dict[str, Optional[str]]
     if gallery and newest and version_tuple(newest) > version_tuple(gallery):
         found.append(Notice('gallery-dl', gallery, newest, None,
                             f'gallery-dl {newest} is available (you have {gallery}). Image downloads may need it.'))
+    insta = versions.get('instaloader')
+    newest = latest.get('instaloader')
+    if insta and newest and version_tuple(newest) > version_tuple(insta):
+        found.append(Notice('instaloader', insta, newest, None,
+                            f'Instaloader {newest} is available (you have {insta}). Instagram downloads may need it.'))
     return found
 
 

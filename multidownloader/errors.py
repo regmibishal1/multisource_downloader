@@ -132,12 +132,13 @@ _TEXT_RULES: Tuple[Tuple[str, str], ...] = (
     (r'login required|log in to|sign in to (confirm your age|view)|requires authentication|loginrequired|'
      r'not logged in|cookies? (are|is) (needed|required)|use --cookies', AUTH_REQUIRED),
     (r'javascript runtime|\bejs\b|yt-dlp-ejs|(ffmpeg|ffprobe|deno)( is)? not (installed|found)', MISSING_COMPONENT),
-    (r'no video could be found|no video formats found|there.s no video in this|no media found', NO_MEDIA),
+    (r'no video could be found|no video formats found|there.s no video in this|there is no video in this|'
+     r'no media found', NO_MEDIA),
     (r'unsupported url|no suitable extractor', UNSUPPORTED),
     (r'http error 404|not found|could not be found|video unavailable|this video is unavailable|has been removed|post not found|'
      r'does not exist|this tweet is unavailable|deleted', NOT_FOUND),
     (r'unable to extract|unable to download json metadata|failed to parse|signature extraction failed|'
-     r'nsig extraction failed', OUTDATED),
+     r'nsig extraction failed|json query to graphql|expecting value: line 1 column 1', OUTDATED),
     (r'getaddrinfo|name or service not known|timed out|timeout|connection (reset|refused|aborted)|'
      r'network is unreachable|temporary failure in name resolution|remote end closed|'
      r'connectionerror|ssl: |urlopen error', NETWORK),

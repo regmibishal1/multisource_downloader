@@ -189,8 +189,13 @@ def _style(root: tk.Misc) -> None:
     style.map('TEntry', bordercolor=[('focus', c['accent'])], fieldbackground=[('readonly', c['surface'])])
     style.configure('TCombobox', fieldbackground=c['surface'], background=c['surface'], arrowcolor=c['text'])
     style.map('TCombobox', fieldbackground=[('readonly', c['surface'])], bordercolor=[('focus', c['accent'])])
-    style.configure('TCheckbutton', background=c['bg'], indicatorbackground=c['surface'])
-    style.configure('TRadiobutton', background=c['bg'], indicatorbackground=c['surface'])
+    for name in ('TCheckbutton', 'TRadiobutton'):
+        # the tick and the dot in the accent colour, with a visible border: clam draws them black by default,
+        # which disappears on the dark palette
+        style.configure(name, background=c['bg'], indicatorbackground=c['surface'], indicatorforeground=c['accent'],
+                        upperbordercolor=c['border'], lowerbordercolor=c['border'])
+        style.map(name, indicatorbackground=[('disabled', c['disabled-bg']), ('pressed', c['divider'])],
+                  indicatorforeground=[('disabled', c['disabled-text'])])
     style.configure('TSpinbox', fieldbackground=c['surface'], arrowcolor=c['text'])
     style.configure('Treeview', background=c['surface'], fieldbackground=c['surface'], foreground=c['text'],
                     bordercolor=c['border'])

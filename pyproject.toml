@@ -17,7 +17,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-instagram = ["instaloader>=4.11"]
+# 4.15.3 fixed reading posts after an Instagram change
+instagram = ["instaloader>=4.15.3"]
 # Drive sign-in with Google cookies needs gdown 6 (cookies_file); public
 # links work with 5 too.
 # Drive with your own Google Cloud OAuth client uses Google's own libraries.

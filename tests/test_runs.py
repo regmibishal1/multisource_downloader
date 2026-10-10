@@ -8,8 +8,9 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from multidownloader import runs
+from multidownloader import runs, session_store
 from multidownloader.runs import Run
 
 
@@ -41,6 +42,10 @@ class RunTests(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name).resolve()
+        # error messages depend on whether a sign-in exists: never read the user's real ones
+        patcher = mock.patch.object(session_store, 'SESSION_ROOT', self.root / '.sessions')
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def test_saved_files_are_hashed_moved_and_recorded(self):
         files = {'youtube/chan/Rally [abc].mp4': b'video bytes', 'youtube/chan/Rally [abc].webp': b'thumb'}

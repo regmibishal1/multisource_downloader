@@ -19,7 +19,10 @@ and cannot prove, so that someone who collected material with it can explain the
      streams. With **Keep files exactly as the platform served them** (on by default) yt-dlp does not
      repair or remux the file after download, so its bytes are what the platform sent; **Also keep
      the separate video and audio streams** saves those too.
-   - **Instaloader** (Instagram) saves the photos and videos of the post as served.
+   - **Instaloader** (Instagram) saves the photos and videos of the post as served. If it fails for a
+     reason other than the sign-in or the post itself (Instagram changes its API often), yt-dlp tries
+     the same link with the same sign-in, and gallery-dl after it for photo posts. The manifest's
+     `backend` says which program saved each post.
    - **gdown** (Google Drive) saves the file exactly as stored in Drive. With your own Google Cloud
      connection, the app reads the file through Google's Drive API with Google's own sign-in
      libraries (google-auth), and checks it against the MD5 checksum Drive gives for it.

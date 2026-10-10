@@ -16,7 +16,7 @@ gdown==6.4.2
 google-auth==2.40.3
 google-auth-oauthlib==1.5.0
 idna==3.20
-instaloader==4.15
+instaloader==4.15.3
 oauthlib==4.0.0
 mutagen==1.48.1
 packaging==26.0

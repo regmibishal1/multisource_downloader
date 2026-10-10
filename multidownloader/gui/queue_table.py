@@ -92,7 +92,8 @@ class QueueTable(ttk.Frame):
 
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
-        self.tree = ttk.Treeview(self, columns=('status', 'platform', 'link', 'result'), show='headings',
+        # height: the rows the table asks for, so the window's minimum size always leaves room for them
+        self.tree = ttk.Treeview(self, columns=('status', 'platform', 'link', 'result'), show='headings', height=6,
                                  style='Queue.Treeview', selectmode='extended')
         for key, label, _width, _stretch in COLUMNS:
             self.tree.heading(key, text=label, anchor='w')

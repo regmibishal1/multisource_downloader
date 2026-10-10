@@ -377,7 +377,7 @@ class DownloaderUI:
             self.links.configure(height=3)
             self.simple_row.grid(row=12, column=0, sticky='ew', pady=(px(8), 0))
             self.frm.rowconfigure(8, weight=0)
-            self.root.minsize(px(480), px(300))
+            self._fit_minsize(px(480), px(300))
             self.root.geometry(f'{px(560)}x{px(300)}')
         else:
             self.simple_row.grid_remove()
@@ -386,9 +386,14 @@ class DownloaderUI:
             self.frm.rowconfigure(8, weight=1)
             if self.prefs.get('details_open'):
                 self.details.grid(row=11, column=0, sticky='ew', pady=(px(8), 0))
-            self.root.minsize(px(760), px(560))
+            self._fit_minsize(px(760), px(560))
             self.root.geometry(self.prefs.get('window_geometry') or f'{px(960)}x{px(680)}')
         self._show_stop()
+
+    def _fit_minsize(self, width: int, height: int):
+        """The window can never get smaller than what its content needs at this display scaling."""
+        self.root.update_idletasks()
+        self.root.minsize(max(width, self.frm.winfo_reqwidth()), max(height, self.frm.winfo_reqheight()))
 
     def toggle_view(self):
         self.set_view('full' if self.view == 'simple' else 'simple')
@@ -1112,6 +1117,8 @@ class DownloaderUI:
             self.details.grid(row=11, column=0, sticky='ew', pady=(px(8), 0))
             self.details_link.configure(text='Hide details')
             self.prefs['details_open'] = True
+        if self.view == 'full':
+            self._fit_minsize(px(760), px(560))  # the log needs room too
 
     def _drain_log(self):
         lines = []
