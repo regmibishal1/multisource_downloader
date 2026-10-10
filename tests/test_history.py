@@ -124,7 +124,7 @@ class PostDetailsTests(unittest.TestCase):
             result = run.download(FakeDownloader(files), 'YouTube', 'https://youtu.be/abc')
         self.assertEqual('yt/Rally [abc].info.json', result.metadata_path)
         self.assertEqual({'id': 'abc', 'uploader': 'reporter', 'posted_at': '2025-10-09T08:53:20Z',
-                          'title': 'Rally at Maitighar'}, result.post)
+                          'title': 'Rally at Maitighar', 'date_source': 'posted'}, result.post)
 
     def test_instaloader_json_fills_post(self):
         node = {'node': {'shortcode': 'AbC', 'owner': {'username': 'witness'}, 'taken_at_timestamp': 1760000000,
@@ -140,7 +140,8 @@ class PostDetailsTests(unittest.TestCase):
         files = {'report.pdf': b'%PDF', 'report.pdf.drive.json': json.dumps(details).encode()}
         with Run(self.root) as run:
             result = run.download(FakeDownloader(files), 'Google Drive', 'https://drive.google.com/file/d/F1/view')
-        self.assertEqual({'id': 'F1', 'uploader': 'Org', 'posted_at': '2026-01-01T00:00:00Z', 'title': 'report.pdf'},
+        self.assertEqual({'id': 'F1', 'uploader': 'Org', 'posted_at': '2026-01-01T00:00:00Z', 'title': 'report.pdf',
+                          'date_source': 'posted'},
                          result.post)
 
 
@@ -175,6 +176,65 @@ class MetadataOptionTests(unittest.TestCase):
         self.assertNotIn('SECRET', text)
         self.assertEqual('UA', json.loads(text)['formats'][0]['http_headers']['User-Agent'])
 
+
+
+@unittest.skipUnless(__import__('importlib').util.find_spec('yt_dlp'), 'yt-dlp not installed')
+class LayoutTemplateTests(unittest.TestCase):
+    """The yt-dlp template, evaluated by yt-dlp itself (brief T10)."""
+
+    def evaluate(self, template, **info):
+        import yt_dlp
+        with yt_dlp.YoutubeDL({'quiet': True, 'windowsfilenames': True}) as ydl:
+            return ydl.evaluate_outtmpl(template, {'ext': 'mp4', 'epoch': 1760000000, **info})
+
+    def test_layout(self):
+        from multidownloader.sources.yt_dlp_base import layout_template
+        t = layout_template('youtube')
+        self.assertEqual('youtube/jawed/2005-04-24_jNQXAC9IVRw.mp4',
+                         self.evaluate(t, id='jNQXAC9IVRw', uploader='jawed', upload_date='20050424'))
+        # no upload date: the download date; no account: "unknown"; items of a post are numbered
+        self.assertEqual('youtube/unknown/2025-10-09_abc_2.mp4', self.evaluate(t, id='abc', playlist_index=2))
+        self.assertEqual('x/reporter/2025-10-09_1890.mp4',
+                         self.evaluate(layout_template('x'), id='1890', uploader_id='reporter'))
+        name = self.evaluate(layout_template('youtube'), id='abc', channel='नेपाल टिभी', upload_date='20251009')
+        self.assertEqual('youtube/नेपाल टिभी/2025-10-09_abc.mp4', name)
+
+    def test_title_only_when_asked_and_cut_to_60(self):
+        from multidownloader.sources.yt_dlp_base import layout_template
+        self.assertNotIn('title', layout_template('youtube'))
+        name = self.evaluate(layout_template('youtube', include_title=True), id='abc', uploader='u',
+                             upload_date='20251009', title='T' * 100)
+        self.assertEqual('youtube/u/2025-10-09_abc_' + 'T' * 60 + '.mp4', name)
+
+    def test_long_output_folder_keeps_files_inside_it(self):
+        # regression: with the folder inside the template, trim_file_name cut
+        # the whole path and files landed outside the output folder
+        import yt_dlp
+
+        from multidownloader.sources.yt_dlp_base import YtDlpHandler
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / ('very-long-folder-name-' * 10) / '_staging' / 'run_0001'
+            self.assertGreater(len(str(out)), 200)
+            with mock.patch.object(yt_dlp_base.shutil, 'which', return_value='ffmpeg'):
+                opts = YtDlpHandler('YouTube')._build_opts(str(out), {}, None)
+            info = {'id': 'jNQXAC9IVRw', 'uploader': 'jawed', 'upload_date': '20050424', 'ext': 'webm',
+                    'title': 'Me at the zoo', 'epoch': 1760000000}
+            with yt_dlp.YoutubeDL({**opts, 'quiet': True}) as ydl:
+                # yt-dlp names the .info.json and thumbnail after this file
+                name = Path(ydl.prepare_filename(info))
+            self.assertEqual(out.resolve() / 'youtube' / 'jawed', name.resolve().parent)
+            self.assertEqual('2005-04-24_jNQXAC9IVRw.webm', name.name)
+
+    def test_handlers_use_the_layout(self):
+        from multidownloader.sources.yt_dlp_base import YtDlpHandler
+        for key, folder in (('YouTube', 'youtube'), ('Twitter', 'x'), ('TikTok', 'tiktok'), ('Reddit', 'reddit'),
+                            ('Facebook', 'facebook'), ('Threads', 'threads')):
+            with self.subTest(key=key):
+                opts = YtDlpHandler(key)._build_opts('OUT', {}, None)
+                self.assertEqual('OUT', opts['paths']['home'])
+                self.assertTrue(opts['outtmpl'].startswith(f'{folder}/%(uploader'))
+                self.assertTrue(opts['windowsfilenames'])
+                self.assertEqual(120, opts['trim_file_name'])
 
 if __name__ == '__main__':
     unittest.main()

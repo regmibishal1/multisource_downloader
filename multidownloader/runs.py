@@ -296,6 +296,8 @@ class Run:
             if name.endswith(('.info.json', '.drive.json')) or (name.endswith('.json') and result.backend == 'instaloader'):
                 post = post_from_metadata(self.root / f.path)
                 if post:
+                    # the folder date is the post's when known, else the download date
+                    post['date_source'] = 'posted' if post.get('posted_at') else 'downloaded'
                     result.metadata_path = f.path
                     result.post = post
                     return

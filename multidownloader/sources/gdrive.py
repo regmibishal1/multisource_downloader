@@ -177,6 +177,10 @@ class GoogleDriveHandler:
 
     # --- choosing a path ---------------------------------------------------
     def _file(self, url, fid, out_dir, method):
+        # gdrive/<file id>/<original name>: Drive names are kept (they are often
+        # the only description of a document), under the id so they cannot clash
+        out_dir = os.path.join(out_dir, 'gdrive', fid)
+        os.makedirs(out_dir, exist_ok=True)
         if method == 'authenticated':
             return self._download_authenticated_file(fid, out_dir)
         try:
@@ -186,6 +190,8 @@ class GoogleDriveHandler:
             return self._after_refusal(exc, method, lambda: self._download_authenticated_file(fid, out_dir))
 
     def _folder(self, fid, out_dir, method):
+        out_dir = os.path.join(out_dir, 'gdrive', fid)
+        os.makedirs(out_dir, exist_ok=True)
         if method == 'authenticated':
             return self._download_authenticated_folder(fid, out_dir)
         try:

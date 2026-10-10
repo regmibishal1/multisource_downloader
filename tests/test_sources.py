@@ -49,11 +49,13 @@ class InstagramDownloadTests(TempSessionRoot):
 
         class FakeLoader:
             dirname_pattern = '{target}'
+            filename_pattern = '{date_utc}_UTC'
             context = object()
 
             def download_post(self, post, target):
                 seen['cwd'] = os.getcwd()
                 seen['pattern'] = self.dirname_pattern
+                seen['filename'] = self.filename_pattern
                 seen['target'] = target
 
         fake_post = mock.Mock()
@@ -68,8 +70,10 @@ class InstagramDownloadTests(TempSessionRoot):
             )
         self.assertEqual(cwd, seen['cwd'])
         self.assertEqual('AbC123', seen['target'])
-        self.assertEqual(os.path.join(out_dir, 'AbC123'), seen['pattern'].format(target='AbC123'))
-        self.assertEqual('{target}', loader.dirname_pattern)
+        # layout: instagram/<account>/<YYYY-MM-DD>_<shortcode>
+        self.assertEqual(os.path.join(out_dir, 'instagram', 'witness'), seen['pattern'].format(profile='witness'))
+        self.assertEqual('{date_utc:%Y-%m-%d}_{shortcode}', seen['filename'])
+        self.assertEqual(('{target}', '{date_utc}_UTC'), (loader.dirname_pattern, loader.filename_pattern))
 
 
 class DriveIdTests(unittest.TestCase):
@@ -99,7 +103,7 @@ class DriveDownloadTests(TempSessionRoot):
                 mock.patch.object(handler, '_download_folder', return_value=True) as folder_dl:
             self.assertTrue(handler.download('https://drive.google.com/open?id=X1', str(self.tmp), {}))
         file_dl.assert_called_once()
-        folder_dl.assert_called_once_with('X1', str(self.tmp), None)
+        folder_dl.assert_called_once_with('X1', os.path.join(str(self.tmp), 'gdrive', 'X1'), None)
 
     def test_gdown_returning_none_is_a_failure(self):
         fake_gdown = mock.Mock()
@@ -124,7 +128,7 @@ class DriveDownloadTests(TempSessionRoot):
                 mock.patch.object(handler, '_get_drive_client', return_value=drive):
             handler.download('https://drive.google.com/file/d/F1/view', str(out_dir), {'method': 'authenticated'})
         self.assertEqual(1, len(written))
-        self.assertEqual(out_dir.resolve(), Path(written[0]).parent)
+        self.assertEqual((out_dir / 'gdrive' / 'F1').resolve(), Path(written[0]).parent)
 
 
 class SafeFilenameTests(unittest.TestCase):

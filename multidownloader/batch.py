@@ -103,6 +103,7 @@ def execute_batch(
     downloader: Optional[Downloader] = None,
     history: Optional[History] = None,
     force: bool = False,
+    include_title: bool = False,
 ) -> Dict[str, object]:
     """Download items. With a history, links saved before are recorded as already saved, unless force."""
     logger = logger or logging.getLogger('multidownloader.batch')
@@ -157,7 +158,7 @@ def execute_batch(
             completed.append((handler, item.url))
             continue
 
-        opts = {}
+        opts = {'include_title': True} if include_title else {}
         if handler == 'Instagram':
             opts['auth'] = 'auto'
         elif handler != 'Google Drive':
@@ -196,6 +197,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument('--limit', type=int, help='Maximum total items to attempt')
     parser.add_argument('--per-source-limit', type=int, help='Maximum items per source to attempt')
     parser.add_argument('--dry-run', action='store_true', help='Only print actions without downloading')
+    parser.add_argument('--include-title', action='store_true',
+                        help='Add the post title (first 60 characters) to file names')
     parser.add_argument('--force', action='store_true',
                         help='Download links again even if an earlier run saved them')
     parser.add_argument('--verbose', action='store_true', help='Enable verbose logging')
@@ -225,6 +228,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         logger=logger,
         history=None if args.dry_run else History(),
         force=args.force,
+        include_title=args.include_title,
     )
 
     logger.info('Attempted: %s, completed: %s, already saved: %s, skipped: %s, errors: %s', result['attempted'],

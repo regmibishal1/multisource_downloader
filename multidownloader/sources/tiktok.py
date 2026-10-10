@@ -6,5 +6,5 @@ from .yt_dlp_base import YtDlpHandler
 
 class TikTokHandler(YtDlpHandler):
     def __init__(self, logger=None):
-        super().__init__('TikTok', logger=logger, outtmpl='%(uploader)s/%(title)s [%(id)s].%(ext)s')
+        super().__init__('TikTok', logger=logger)
 

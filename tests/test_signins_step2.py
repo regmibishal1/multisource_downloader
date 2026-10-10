@@ -208,7 +208,8 @@ class DriveDownloadTests(TempStore):
         h = self.handler()
         with mock.patch.object(h, '_download_public_file', return_value=True) as public:
             self.assertTrue(h.download('https://drive.google.com/file/d/F1/view', str(self.tmp), {}))
-        public.assert_called_once_with('https://drive.google.com/file/d/F1/view', str(self.tmp), None)
+        public.assert_called_once_with('https://drive.google.com/file/d/F1/view',
+                                       os.path.join(str(self.tmp), 'gdrive', 'F1'), None)
 
     def test_private_link_without_signin(self):
         h = self.handler()
@@ -259,7 +260,7 @@ class DriveDownloadTests(TempStore):
         with mock.patch.object(h, '_download_public_file', side_effect=RuntimeError('permission denied')), \
                 mock.patch.object(h, '_download_authenticated_file', return_value='saved') as oauth:
             self.assertEqual('saved', h.download('https://drive.google.com/file/d/F1/view', str(self.tmp), {}))
-        oauth.assert_called_once_with('F1', str(self.tmp))
+        oauth.assert_called_once_with('F1', os.path.join(str(self.tmp), 'gdrive', 'F1'))
 
     def test_explicit_public_never_signs_in(self):
         signins.save_oauth_signin(DRIVE)

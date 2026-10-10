@@ -101,6 +101,7 @@ Options:
 What each run saves
 -------------------
 
+- Files are named `<platform>/<account>/<YYYY-MM-DD>_<post id>.<ext>` (for example `youtube/jawed/2005-04-24_jNQXAC9IVRw.webm`), numbered `_1`, `_2` for posts with several items. The date is the post's date, or the download date when the site gives none (the manifest says which). Titles stay out of file names unless you pass `--include-title` (first 60 characters). Google Drive files keep their own names under `gdrive/<file id>/`.
 - Media goes into the download folder; next to it, the post's details: yt-dlp's `.info.json` (caption, upload time, uploader, counts) and thumbnail, Instaloader's `.json`, or a `.drive.json` for Drive files. Cookies are removed from `.info.json` files, and nothing is embedded into the media.
 - Each link first downloads into `_staging/` and is moved into place once complete, so half-finished files never mix with the archive. An existing file is never overwritten: a different file with the same name is saved as `name (2).ext`, and an identical one is kept once.
 - Every run writes `_runs/<run id>/` with `manifest.jsonl` (one line per link, written as each finishes), `manifest.csv`, and `SHA256SUMS.txt`. To check later that no file changed, run this from the download folder: `sha256sum -c _runs/<run id>/SHA256SUMS.txt`.
