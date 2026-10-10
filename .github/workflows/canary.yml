@@ -1,0 +1,89 @@
+name: Canary
+
+# Real downloads on every platform (scripts/smoke.py), weekly: platforms change without warning and break
+# the downloaders the app uses. Two runs: the exact versions in requirements.txt (does what we ship still
+# work?) and the newest downloaders (would an update fix it?). A scheduled or manual run that finds a
+# broken platform opens an issue, or adds to the open one.
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # Mondays 06:00 UTC
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - scripts/smoke.py
+      - scripts/smoke_links.json
+      - .github/workflows/canary.yml
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  smoke:
+    name: Smoke test, ${{ matrix.deps }} downloaders
+    runs-on: windows-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        deps: [pinned, newest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install (pinned)
+        if: matrix.deps == 'pinned'
+        run: python -m pip install -r requirements.txt
+      - name: Install (newest)
+        if: matrix.deps == 'newest'
+        run: |
+          python -m pip install ".[all]"
+          python -m pip install -U "yt-dlp[default]" instaloader gallery-dl gdown
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Firefox profile (TikTok uses its User-Agent)
+        shell: pwsh
+        run: |
+          $ff = "C:\Program Files\Mozilla Firefox\firefox.exe"
+          if (Test-Path $ff) {
+            Start-Process $ff -ArgumentList '-headless', '-screenshot', "$env:RUNNER_TEMP\ff.png", 'about:blank' -Wait
+          } else { Write-Output 'Firefox is not on this runner' }
+      - name: Smoke test
+        id: smoke
+        shell: pwsh
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          python scripts/smoke.py --ci --markdown smoke.md --json smoke.json
+          "status=$LASTEXITCODE" >> $env:GITHUB_OUTPUT
+          exit 0
+      - name: Summary
+        if: always()
+        shell: pwsh
+        run: if (Test-Path smoke.md) { Get-Content smoke.md >> $env:GITHUB_STEP_SUMMARY }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: smoke-${{ matrix.deps }}
+          path: smoke.*
+          retention-days: 30
+      - name: Open or update the canary issue
+        if: steps.smoke.outputs.status == '1' && github.event_name != 'pull_request'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $title = 'Canary: a platform stopped working'
+          $body = "**${{ matrix.deps }} downloaders**, run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`n`n" + (Get-Content smoke.md -Raw)
+          Set-Content -Path issue.md -Value $body -Encoding utf8
+          $open = gh issue list --state open --search "in:title $title" --json number --jq '.[0].number'
+          if ($open) { gh issue comment $open --body-file issue.md } else { gh issue create --title $title --body-file issue.md }
+      - name: Fail when a platform broke
+        if: steps.smoke.outputs.status != '0'
+        shell: pwsh
+        run: |
+          Write-Output "Smoke test exit code ${{ steps.smoke.outputs.status }}: see the summary"
+          exit 1

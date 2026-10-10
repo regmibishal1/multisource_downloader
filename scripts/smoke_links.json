@@ -1,0 +1,29 @@
+{
+  "about": "Real links for scripts/smoke.py: one or more per platform, checked by hand on 2026-10-10. 'expect' is saved, failed:<error kind> or skipped. 'signin' is none (works without), optional (may need it from some networks) or required. Replace a link when its post disappears; keep links public, stable and harmless.",
+  "links": [
+    {"platform": "youtube", "url": "https://www.youtube.com/watch?v=jNQXAC9IVRw", "expect": "saved", "signin": "none",
+     "note": "Me at the zoo, the first YouTube video"},
+    {"platform": "x", "url": "https://twitter.com/captainamerica/status/719944021058060289", "expect": "saved", "signin": "optional",
+     "note": "short video"},
+    {"platform": "instagram", "url": "https://www.instagram.com/reel/Chunk8-jurw/", "expect": "saved", "signin": "optional",
+     "note": "@instagram reel"},
+    {"platform": "instagram", "url": "https://www.instagram.com/p/BQ0eAlwhDrw/", "expect": "saved", "signin": "optional",
+     "note": "@instagram carousel, 3 items"},
+    {"platform": "tiktok", "url": "https://www.tiktok.com/@tiktok/video/7106594312292453675", "expect": "saved", "signin": "none",
+     "note": "@tiktok video; needs Firefox installed for its User-Agent"},
+    {"platform": "facebook", "url": "https://www.facebook.com/cnn/videos/10155529876156509/", "expect": "saved", "signin": "optional",
+     "note": "CNN video"},
+    {"platform": "reddit", "url": "https://www.reddit.com/r/videos/comments/6rrwyj/that_small_heart_attack/", "expect": "saved", "signin": "optional",
+     "note": "r/videos post"},
+    {"platform": "bluesky", "url": "https://bsky.app/profile/bsky.app/post/3l3vgf77uco2g", "expect": "saved", "signin": "none",
+     "note": "@bsky.app video post, through gallery-dl"},
+    {"platform": "gdrive", "url": "https://drive.google.com/file/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/view", "expect": "saved", "signin": "none",
+     "note": "Google's public example spreadsheet"},
+    {"platform": "threads", "url": "https://www.threads.com/@mosseri/post/DeIqbp0lJAa", "expect": "failed:unsupported", "signin": "none",
+     "note": "no Threads reader in yt-dlp or gallery-dl yet; 'saved' here means one arrived"},
+    {"platform": "youtube", "url": "https://www.youtube.com/watch?v=2AGvM9aV-Nw", "expect": "failed:not_found", "signin": "none",
+     "note": "removed video: checks the plain error"},
+    {"platform": null, "url": "https://example.org/some-video", "expect": "skipped", "signin": "none",
+     "note": "unsupported site"}
+  ]
+}

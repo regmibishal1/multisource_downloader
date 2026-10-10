@@ -161,6 +161,8 @@ Tests that open windows run only in CI or with `MSDL_GUI_TESTS=1`, because a tes
 
 Versions and their history are in [DEPENDENCIES.md](DEPENDENCIES.md); `requirements-lock.txt` is a snapshot of the exact versions the tests last passed with (`python scripts/snapshot_env.py` refreshes it). Before pushing, run `python scripts/check_public.py --commits origin/master..HEAD`: it fails on secrets, personal paths or e-mail addresses, AI mentions and em dashes. CI runs it, ruff and the tests on Windows and Ubuntu with Python 3.10 and 3.13.
 
+Keeping the downloads working is the main ongoing work: the platforms change and the downloaders need updates to follow. `scripts/smoke.py` runs real downloads on every platform (your data folder is never used), a weekly GitHub canary runs it with the shipped and the newest downloaders and opens an issue when a platform breaks, and [docs/maintenance.md](docs/maintenance.md) says what to do then.
+
 Windows app: `python -m pip install pyinstaller`, then `python scripts/build_exe.py` writes `dist/MultisourceDownloader/` and a zip, with `LICENSE` and `THIRD_PARTY_LICENSES.txt` (from `scripts/third_party_licenses.py`). `MultisourceDownloader.exe --self-test --report self-test.txt` checks a build without the network or your data: a hidden window, one fake download with its manifest, a fake sign-in saved and removed, and the bundled components. CI builds the app, runs the self-test and keeps the zip for 14 days.
 
 loot_report_scraper: its `run_downloader.py` calls `multidownloader.batch` with the latest `grouped_by_source.json`. Point it at this project:
