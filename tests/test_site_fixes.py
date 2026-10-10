@@ -87,6 +87,34 @@ class ErrorWordingTests(unittest.TestCase):
         self.assertEqual(errors.AUTH_REQUIRED, errors.classify(RuntimeError(text)).kind)
 
 
+class NoConsoleTests(unittest.TestCase):
+    def test_streams_get_somewhere_to_write(self):
+        import sys
+        import multisource_downloader_ui as ui
+        with mock.patch.object(sys, 'stdout', None), mock.patch.object(sys, 'stderr', None):
+            ui.ensure_std_streams()
+            sys.stderr.write('progress bar')  # what gdown does; must not fail
+            sys.stdout.write('x')
+            self.assertIsNotNone(sys.stdout)
+            opened = (sys.stdout, sys.stderr)
+        for stream in opened:
+            stream.close()
+
+    def test_existing_streams_are_kept(self):
+        import sys
+        import multisource_downloader_ui as ui
+        before = (sys.stdout, sys.stderr)
+        ui.ensure_std_streams()
+        self.assertEqual(before, (sys.stdout, sys.stderr))
+
+    def test_main_does_it_first(self):
+        import multisource_downloader_ui as ui
+        with mock.patch.object(ui, 'ensure_std_streams', side_effect=SystemExit(0)) as ensure:
+            with self.assertRaises(SystemExit):
+                ui.main(['--self-test'])
+        ensure.assert_called_once()
+
+
 class ThreadsTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()

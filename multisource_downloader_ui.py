@@ -1196,7 +1196,20 @@ def start_view(args, prefs) -> str:
     return 'simple' if getattr(sys, 'frozen', False) else 'full'
 
 
+def ensure_std_streams() -> None:
+    """Give Python somewhere to write when there is no console.
+
+    Started with pythonw, or as the windowed Windows app, sys.stdout and sys.stderr are None, and a
+    library that prints (gdown's progress bar, for one) fails with "'NoneType' object has no attribute
+    'write'". Their output goes nowhere instead; the app's own log is unaffected.
+    """
+    for name in ('stdout', 'stderr'):
+        if getattr(sys, name) is None:
+            setattr(sys, name, open(os.devnull, 'w', encoding='utf-8'))
+
+
 def main(argv=None):
+    ensure_std_streams()
     argv = sys.argv[1:] if argv is None else list(argv)
     if argv[:1] == ['--signin-window']:
         # the Windows app runs the sign-in window as a second copy of itself
