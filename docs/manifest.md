@@ -10,6 +10,7 @@ download folder. The run id is the start time in UTC plus four random characters
 | `manifest.csv` | The same rows with the columns below, for spreadsheets. |
 | `SHA256SUMS.txt` | The SHA-256 of every saved file, relative to the download folder. `sha256sum -c _runs/<run id>/SHA256SUMS.txt`, run from the download folder, checks that nothing changed. |
 | `run.json` | The list of links the run was asked to do. With the manifest it tells which links were not done, so an unfinished run can be resumed. |
+| `notes.json` | Your notes, when you added any: `run` (`topic`, `where`, `collected_by`, `notes`) and `links` (one note per link). Each change is also a `noted` line in the custody log. |
 | `custody.log` | What happened to the files, in order, one event per line, each line chained to the one before by its SHA-256. See [how-it-works.md](how-it-works.md#the-custody-log). |
 
 The head of each custody log is also recorded in `anchors.log` in the per-user data folder
@@ -35,13 +36,14 @@ The head of each custody log is also recorded in `anchors.log` in the per-user d
 | `error_detail` | The downloader's own error text, for bug reports. |
 | `skip_reason` | For a skipped link: `unsupported` or `duplicate`. |
 | `previous` | For `already_saved`: when and where an earlier run saved it. |
+| `notes` | Your notes when the link was recorded: `run` (the run's topic, place, collector and notes) and `link` (this link's note). Notes added later are in `notes.json`. |
 | `source_hint` | The platform name the link came with in an imported list, if any. |
 | `wayback_url` | Reserved for an Internet Archive copy; empty for now. |
 
 ## Columns in `manifest.csv`
 
 `run_id, status, platform, input_url, normalized_url, backend, files, bytes, sha256, error_kind,
-error_message, started_at, finished_at, app_version, backend_version`. The file is UTF-8 with a
+error_message, started_at, finished_at, app_version, backend_version, note` (`note` is the link's note). The file is UTF-8 with a
 byte order mark, so Excel opens it correctly. `files` and `sha256` list several values separated by
 ` | ` for posts with more than one file; `bytes` is their total. For a skipped link, `error_message`
 holds the skip reason.
@@ -52,7 +54,7 @@ holds the skip reason.
 |---|---|
 | `seq` | Line number, from 1. |
 | `at` | UTC time of the event. |
-| `event` | `run_started`, `captured` (a download finished), `hashed` (a file's SHA-256), `verified`, `exported`, `copied`, `anchored` (the head was recorded elsewhere), `run_finished`. |
+| `event` | `run_started` (with the run's notes), `captured` (a download finished), `hashed` (a file's SHA-256), `noted` (a link's note was added or changed), `verified`, `exported`, `copied`, `anchored` (the head was recorded elsewhere), `run_finished`. |
 | `run_id`, `app` | The run and the app version. |
 | `detail` | Event details, for example `path` and `sha256` for `hashed`, or `method`, `seq` and `head` for `anchored`. |
 | `note` | A note from the user, if any. |
