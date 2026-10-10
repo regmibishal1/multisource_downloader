@@ -646,7 +646,7 @@ class DownloaderUI:
 
     def dismiss_unfinished(self):
         if self.unfinished:
-            self.unfinished.close('dismissed')
+            self.unfinished.close('dismissed', anchor_path=custody.default_anchor_path())
         self.unfinished = None
         self.resume_bar.grid_remove()
 
@@ -733,7 +733,7 @@ class DownloaderUI:
         self.package_btn.state(['disabled'])
         self.retry_btn.grid_remove()
         if resumed:
-            resumed.close('resumed', by_run=run.run_id)
+            resumed.close('resumed', by_run=run.run_id, anchor_path=custody.default_anchor_path())
 
         # everything the worker needs was read above: it must not read Tk variables
         self.save_prefs()
@@ -866,7 +866,7 @@ class DownloaderUI:
         self.refresh_signin_summary()
         self.export_btn.state(['!disabled'] if run else ['disabled'])
         self.package_btn.state(['!disabled'] if run else ['disabled'])
-        failed = self.table.count('failed')
+        failed = len(self.table.failed_links())  # only the ones a retry can fix
         self.retry_btn.configure(text=f'Retry failed ({failed})')
         if failed:
             self.retry_btn.grid()

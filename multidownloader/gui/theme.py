@@ -200,6 +200,8 @@ def _style(root: tk.Misc) -> None:
     style.configure('Treeview', background=c['surface'], fieldbackground=c['surface'], foreground=c['text'],
                     bordercolor=c['border'])
     style.configure('Treeview.Heading', background=c['bg'], foreground=c['text'], bordercolor=c['divider'])
+    style.map('Treeview.Heading', background=[('pressed', c['divider']), ('active', c['divider'])],
+              foreground=[('active', c['text'])])
     style.configure('Horizontal.TProgressbar', background=c['accent'], troughcolor=c['divider'],
                     thickness=px(6))
     style.configure('TLabelframe', background=c['bg'], bordercolor=c['divider'])

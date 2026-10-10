@@ -221,6 +221,10 @@ class OptionsWindowTests(unittest.TestCase):
                     self.assertEqual(palette['border'], str(style.lookup(name, 'upperbordercolor')).upper())
                 # the dot/tick colour against the indicator's background meets 3:1 (WCAG 1.4.11)
                 self.assertGreaterEqual(contrast(palette['accent'], palette['surface']), 3.0)
+                # a hovered column heading keeps the palette's colours (clam's default was near white)
+                hover = style.map('Treeview.Heading', 'background')
+                self.assertIn(('active', palette['divider']), [(s[0], str(c).upper()) for *s, c in hover])
+                self.assertGreaterEqual(contrast(palette['text'], palette['divider']), 4.5)
 
 
 if __name__ == '__main__':

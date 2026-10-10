@@ -58,6 +58,13 @@ def _size(n: Optional[int]) -> str:
     return f'{n:.1f} GB'
 
 
+NOT_RETRYABLE = {'not_found', 'unsupported', 'geo_blocked'}
+
+
+def retryable(result) -> bool:
+    return getattr(result, 'error_kind', None) not in NOT_RETRYABLE
+
+
 def result_text(result) -> str:
     """The Result column for a finished link."""
     status = result.status
@@ -194,8 +201,11 @@ class QueueTable(ttk.Frame):
     def count(self, state: str) -> int:
         return sum(1 for row in self.rows.values() if row.state == state)
 
-    def failed_links(self):
-        return [(row.url, row.handler) for row in self.rows.values() if row.state == 'failed' and row.handler]
+    def failed_links(self, retryable_only: bool = True):
+        """Failed rows to try again; by default not the ones a retry cannot fix (deleted, unsupported,
+        blocked in this region). Their own menu still offers Retry."""
+        return [(row.url, row.handler) for row in self.rows.values()
+                if row.state == 'failed' and row.handler and not (retryable_only and not retryable(row.result))]
 
     def selected(self) -> List[Row]:
         return [self.rows[iid] for iid in self.tree.selection() if iid in self.rows]

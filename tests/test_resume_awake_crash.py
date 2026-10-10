@@ -237,8 +237,9 @@ class CrashTests(unittest.TestCase):
             app = ui.DownloaderUI(self.root)
         self.assertEqual('! Your last run stopped before it finished. 2 links were not done.', app.resume_var.get())
         self.assertTrue(app.resume_bar.grid_info())
-        app.dismiss_unfinished()
-        unfinished.close.assert_called_once_with('dismissed')
+        with mock.patch.object(ui.custody, 'default_anchor_path', return_value=Path('anchors.log')):
+            app.dismiss_unfinished()
+        unfinished.close.assert_called_once_with('dismissed', anchor_path=Path('anchors.log'))
         self.assertFalse(app.resume_bar.grid_info())
 
 

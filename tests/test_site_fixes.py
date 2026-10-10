@@ -87,6 +87,36 @@ class ErrorWordingTests(unittest.TestCase):
         self.assertEqual(errors.AUTH_REQUIRED, errors.classify(RuntimeError(text)).kind)
 
 
+class UnfinishedRunAnchorTests(unittest.TestCase):
+    def test_closing_an_unfinished_run_anchors_its_custody_log(self):
+        from multidownloader import custody, runs, verify
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            pointer, anchors = tmp / 'last_run.json', tmp / 'userdata' / 'anchors.log'
+            run = runs.Run(tmp / 'out', last_run_pointer=pointer, anchor_path=anchors)
+            run.plan([{'url': 'https://x.com/a/status/1', 'handler': 'Twitter'}])
+            run._jsonl.close()  # the app stopped here: no run_finished, no anchor
+            report = custody.check(run.dir / 'custody.log', anchor_path=anchors)
+            self.assertIn('has no anchor', report.message)
+            runs.last_unfinished_run(pointer).close('dismissed', anchor_path=anchors)
+            self.assertIn(run.run_id, anchors.read_text(encoding='utf-8'))
+            self.assertIn('only anchored on this computer',
+                          custody.check(run.dir / 'custody.log', anchor_path=anchors).message)
+            self.assertTrue(verify.verify(run.dir, check_custody=True, anchor_path=anchors).custody.ok)
+
+
+class RetryFailedTests(unittest.TestCase):
+    def test_only_failures_a_retry_can_fix(self):
+        from multidownloader.gui import queue_table
+        rows = {}
+        for url, kind in (('a', 'network'), ('b', 'not_found'), ('c', 'unsupported'), ('d', 'rate_limited'),
+                          ('e', 'geo_blocked'), ('f', None)):
+            rows[url] = queue_table.Row(url, 'Twitter', 'X', state='failed', result=mock.Mock(error_kind=kind))
+        table = mock.Mock(rows=rows)
+        self.assertEqual(['a', 'd', 'f'], [u for u, _h in queue_table.QueueTable.failed_links(table)])
+        self.assertEqual(6, len(queue_table.QueueTable.failed_links(table, retryable_only=False)))
+
+
 class NoConsoleTests(unittest.TestCase):
     def test_streams_get_somewhere_to_write(self):
         import sys
