@@ -27,6 +27,7 @@ Change log
 
 ### 2026-10-10
 
+- Added the rest of yt-dlp's `default` extra to `penv`: `brotli` 1.2.0, `mutagen` 1.48.1, `pycryptodomex` 3.24.0 and `websockets` 17.2 (yt-dlp itself unchanged at 2026.8.19). Some sites need websockets (live streams) or pycryptodomex (encrypted streams); `pip install ".[all]"` and the Windows app already had them.
 - Added `gallery-dl` 1.32.16 for image posts (photo-only X posts, carousels, Reddit, TikTok and Facebook photos) and Bluesky. It is GPL-2.0-only, so the app runs it as a separate program and never imports it.
 
 ### 2026-10-09
