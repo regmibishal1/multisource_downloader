@@ -17,7 +17,7 @@ python -m pip install "multisource-downloader[all] @ git+https://github.com/regm
 multisource-downloader
 ```
 
-That adds four commands: `multisource-downloader` (the window), `multidownloader-batch` (lists of links), `multidownloader-signin` (sign-ins) and `msdl` (archive tools: verify). Instead of `all` you can pick only what you need: `instagram`, `drive`, `webview` ("Sign in here"), `images` (photo posts and Bluesky).
+That adds four commands: `multisource-downloader` (the window), `multidownloader-batch` (lists of links), `multidownloader-signin` (sign-ins) and `msdl` (archive tools: verify, export). Instead of `all` you can pick only what you need: `instagram`, `drive`, `webview` ("Sign in here"), `images` (photo posts and Bluesky).
 
 Two programs that are not Python packages help with videos:
 
@@ -38,6 +38,7 @@ More in the window:
 - Enter or a double-click opens a file. Right-click, Shift+F10 or the Menu key: Open file, Open folder, Copy link, Copy error, Fix sign-in, Retry, Download again, Remove from list. Right-click a column heading for **Fit columns**.
 - **Stop** (Ctrl+.) asks first, then stops within seconds; an unfinished file is removed. If a run stops early (closed window, crash, power cut), a bar offers **Resume** next time.
 - **Add notes (optional)**, above the queue: event or topic, where, collected by (a name or pseudonym) and notes, saved with the next run; **Add note...** in a link's menu adds a note to one link, before or after it downloads. Notes stay in the run folder. Leave out names if sharing them could put someone at risk. On the command line: `--topic`, `--where`, `--collected-by`, `--note`.
+- **Verify files** re-hashes every file of the last run (or a run folder or package you choose) and checks the custody log. **Export package...** copies the run, its files and its records into a BagIt package (RFC 8493), the standard folder format archives and lawyers can check with any BagIt tool, and verifies it. Options, Archive packages, sets an optional organization name for it.
 - **Export report** writes one web page and the run's CSV. Account names of the people in the posts are left out unless you choose to include them.
 - **Options** (Ctrl+,): video quality (the original, up to 1080p or 720p, audio only), what to save next to the media (post details, thumbnails, the uploader's own subtitles), folder layout, the post title in file names, links at once, a short pause between links from one platform, keeping the computer awake, the look (same as Windows, light or dark) and the daily update check.
 - **?**: Help (F1, a page bundled with the app), Keyboard shortcuts, Copy diagnostics for a bug report (sign-ins removed), Open log folder.
@@ -99,7 +100,8 @@ What each run saves
 - Next to the media: the post's details (yt-dlp's `.info.json`, Instaloader's `.json`, or a `.drive.json`) and the thumbnail. Cookies are removed from `.info.json` files, and nothing is embedded into the media.
 - Each link downloads into `_staging/` first and is moved into place once complete. An existing file is never overwritten: a different file with the same name is saved as `name (2).ext`, an identical one is kept once.
 - Every run writes `_runs/<run id>/` with `manifest.jsonl`, `manifest.csv`, `SHA256SUMS.txt` and `custody.log`, an append-only record of what happened to the files whose latest hash is also kept outside the download folder. Every field is described in [docs/manifest.md](docs/manifest.md), and [docs/how-it-works.md](docs/how-it-works.md) explains what each downloader does to a file and what the records can and cannot prove.
-- To check later that nothing changed, run `msdl verify <download folder>\_runs\<run id>`: it re-hashes every file and says "All 214 files match." or lists the changed and missing ones (exit code 0 or 1). `--custody` also checks the custody log against its anchors. `sha256sum -c _runs/<run id>/SHA256SUMS.txt` from the download folder works too.
+- `msdl export <download folder>\_runs\<run id> --bag D:\handover` writes `package-<run id>/` (add `--zip` for a zip too, `--source-organization` for your organization): the run's files under `data/`, SHA-512 and SHA-256 manifests, and `bag-info.txt` with the run id, your notes and the custody log's head. The package includes the manifest, so it contains the account names of the people in the posts; share it only with people who need it.
+- To check later that nothing changed, run `msdl verify <download folder>\_runs\<run id>` (or a package folder): it re-hashes every file and says "All 214 files match." or lists the changed and missing ones (exit code 0 or 1). `--custody` also checks the custody log against its anchors. `sha256sum -c _runs/<run id>/SHA256SUMS.txt` from the download folder works too.
 - Links saved in earlier runs, even shared in another format, are recorded as "already saved". The list is `history.sqlite` in your user data folder.
 
 Supported platforms and what downloads them: YouTube, X, TikTok, Threads, Reddit and Facebook with yt-dlp; Instagram with Instaloader; Google Drive with gdown and PyDrive2; Bluesky and image posts (photo-only X posts, Reddit, TikTok and Facebook photo posts) with gallery-dl. Image-only Threads posts are not supported yet.

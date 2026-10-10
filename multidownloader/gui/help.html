@@ -102,6 +102,7 @@ nav ul { columns: 2; padding-left: 20px; }
 <section id="export">
 <h2>Reports and the run folder</h2>
 <p class="summary">Every run has its own folder with a list of what was saved and each file's fingerprint.</p>
+<p><b>Verify files</b> re-hashes every file of the last run and checks the custody log; it says "All 214 files match." or lists what changed. <b>Export package...</b> copies the run into a standard archive package (BagIt) for handing over, and checks it. The package includes the account names of the people in the posts, so share it only with people who need it.</p>
 <p>The run folder (<code>_runs</code> in your download folder) has <code>manifest.jsonl</code> and <code>manifest.csv</code> (one line per link: where it came from, when, which files) and <code>SHA256SUMS.txt</code>. <b>Export report</b> writes one web page and the CSV. Account names of the people in the posts are left out of the report unless you choose to include them.</p>
 </section>
 

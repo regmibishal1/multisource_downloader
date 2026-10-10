@@ -43,6 +43,7 @@ def defaults() -> Dict[str, Any]:
         'theme': 'system',          # system | light | dark
         'view': 'full',             # full | simple (brief F21)
         'check_updates': True,      # once a day, ask pypi.org for the newest yt-dlp and gallery-dl (F24)
+        'source_organization': '',  # Source-Organization in export packages (F26)
     }
 
 
@@ -85,6 +86,7 @@ _VALIDATORS = {
     'theme': lambda v: v in THEMES,
     'view': lambda v: v in ('full', 'simple'),
     'check_updates': lambda v: isinstance(v, bool),
+    'source_organization': lambda v: isinstance(v, str) and len(v) <= 200 and '\n' not in v,
 }
 
 

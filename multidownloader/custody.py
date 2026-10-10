@@ -207,10 +207,12 @@ class CustodyReport:
 
 
 def check(log_path, run_id: Optional[str] = None, *, anchor_path: Optional[Path] = None,
-          package_anchor: Optional[Dict] = None) -> CustodyReport:
+          package_anchor: Optional[Dict] = None, copy: bool = False) -> CustodyReport:
     """The strongest true statement about the log (brief 13.4, Verify).
 
     package_anchor: {"seq": int, "head": str, "at": iso} from an export package's bag-info.txt (A2).
+    copy: the log is a copy taken at some point (in a package), so local anchors made after it was
+    taken are skipped; for the run's own log a missing anchored line means lines were removed.
     """
     log_path = Path(log_path)
     if not log_path.exists():
@@ -220,6 +222,8 @@ def check(log_path, run_id: Optional[str] = None, *, anchor_path: Optional[Path]
     hashed = {e['detail'].get('path'): e['detail'].get('sha256') for e in chain.entries
               if e.get('event') == 'hashed' and isinstance(e.get('detail'), dict)}
     anchors = [dict(a, kind='local') for a in read_anchors(run_id, anchor_path)] if run_id else []
+    if copy and chain.broken_at is None:
+        anchors = [a for a in anchors if (a.get('seq') or 0) <= len(chain.entries)]
     if package_anchor:
         anchors.append(dict(package_anchor, kind='package', anchored_at=package_anchor.get('at')))
     # every anchor must match the chain at its seq; the earliest one that does not is reported

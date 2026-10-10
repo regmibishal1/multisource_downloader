@@ -61,6 +61,22 @@ holds the skip reason.
 | `prev` | `sha256:` and the SHA-256 of the previous line as written, without its line ending (`sha256:000...0` on line 1). |
 | `hash` | `sha256:` and the SHA-256 of this line written with `"hash":""`. |
 
+## Export packages
+
+`msdl export` and **Export package...** write a BagIt bag (RFC 8493) of one run:
+
+| File | What it is |
+|---|---|
+| `bagit.txt` | `BagIt-Version: 1.0`, UTF-8. |
+| `data/` | The run's files at the same paths as in the download folder, and its run folder under `data/_runs/<run id>/`. |
+| `manifest-sha512.txt`, `manifest-sha256.txt` | Every file under `data/` with its checksum. |
+| `bag-info.txt` | `Source-Organization` (optional, from Options), `Bagging-Date`, `Payload-Oxum` (bytes and file count), `External-Identifier` (the run id), `External-Description` (your run notes), `Bag-Software-Agent`, `Bag-Count`, `Internal-Sender-Description`, and `Custody-Log-Head`, `Custody-Log-Seq` and `Custody-Log-Anchored`: the head of the package's copy of the custody log. |
+| `tagmanifest-sha512.txt`, `tagmanifest-sha256.txt` | The checksums of the four files above. |
+
+Any BagIt tool can check the package, for example `bagit.py --validate package-<run id>` (bagit-python from
+the Library of Congress). `msdl verify --custody package-<run id>` also checks the custody log against
+`Custody-Log-Head`.
+
 ## Privacy
 
 `post.uploader` and file paths contain the account names of the people in the posts. Exported HTML
