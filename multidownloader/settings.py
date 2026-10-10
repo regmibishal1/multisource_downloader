@@ -41,6 +41,7 @@ def defaults() -> Dict[str, Any]:
         'layout': 'account',        # account | platform | flat
         'polite': True,             # random pause between links from one platform
         'theme': 'system',          # system | light | dark
+        'view': 'full',             # full | simple (brief F21)
     }
 
 
@@ -81,6 +82,7 @@ _VALIDATORS = {
     'layout': lambda v: v in LAYOUTS,
     'polite': lambda v: isinstance(v, bool),
     'theme': lambda v: v in THEMES,
+    'view': lambda v: v in ('full', 'simple'),
 }
 
 

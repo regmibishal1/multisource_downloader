@@ -50,7 +50,7 @@ packages = ["multidownloader"]
 "multisource_downloader_ui.py" = "multisource_downloader_ui.py"
 
 [tool.hatch.build.targets.sdist]
-exclude = ["penv", "portable_manager/build", "portable_manager/dist"]
+exclude = ["penv", "build", "dist"]
 
 [tool.ruff]
 line-length = 120
