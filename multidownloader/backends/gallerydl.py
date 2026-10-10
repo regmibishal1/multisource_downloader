@@ -49,10 +49,11 @@ def available() -> Tuple[bool, str]:
 
 
 def build_config(out_dir: str, platform_key: str, *, cookies: Optional[str] = None,
-                 user_agent: Optional[str] = None) -> dict:
+                 user_agent: Optional[str] = None, layout: str = 'account', write_metadata: bool = True) -> dict:
+    folders = {'account': [platform_key, ACCOUNT], 'platform': [platform_key], 'flat': []}
     extractor = {
         'base-directory': str(out_dir),
-        'directory': [platform_key, ACCOUNT],
+        'directory': folders.get(layout, folders['account']),
         'filename': f'{DATE}_{POST_ID}_{{num}}.{{extension}}',
         'path-restrict': 'windows',  # names valid on Windows, FAT and exFAT too
         'skip': False,
@@ -63,6 +64,8 @@ def build_config(out_dir: str, platform_key: str, *, cookies: Optional[str] = No
             'mode': 'json',
         }],
     }
+    if not write_metadata:
+        extractor['postprocessors'] = []
     if cookies:
         extractor['cookies'] = cookies
         extractor['cookies-update'] = False
@@ -72,7 +75,8 @@ def build_config(out_dir: str, platform_key: str, *, cookies: Optional[str] = No
 
 
 def download(url: str, out_dir: str, *, platform_key: str, cookie_file: Optional[Path] = None,
-             user_agent: Optional[str] = None, cancel_event=None, runner=subprocess.Popen) -> List[str]:
+             user_agent: Optional[str] = None, cancel_event=None, layout: str = 'account',
+             write_metadata: bool = True, runner=subprocess.Popen) -> List[str]:
     """Download url into out_dir. Returns the files written; raises RuntimeError with gallery-dl's message."""
     cmd = command()
     if not cmd:
@@ -84,7 +88,8 @@ def download(url: str, out_dir: str, *, platform_key: str, cookie_file: Optional
             shutil.copyfile(cookie_file, cookies)  # gallery-dl never writes the stored sign-in
         config_path = os.path.join(work, 'config.json')
         with open(config_path, 'w', encoding='utf-8') as fp:
-            json.dump(build_config(out_dir, platform_key, cookies=cookies, user_agent=user_agent), fp)
+            json.dump(build_config(out_dir, platform_key, cookies=cookies, user_agent=user_agent, layout=layout,
+                                   write_metadata=write_metadata), fp)
         before = {p for p in Path(out_dir).rglob('*') if p.is_file()}
         args = [*cmd, '--config-ignore', '--config-json', config_path, url]
         _log.info('gallery-dl start: %s', url)

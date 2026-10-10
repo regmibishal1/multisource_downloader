@@ -31,11 +31,22 @@ DATE_FIELD = '%(upload_date>%Y-%m-%d,epoch>%Y-%m-%d)s'
 TITLE_LENGTH = 60
 
 
-def layout_template(platform_key: str, include_title: bool = False) -> str:
+def layout_template(platform_key: str, include_title: bool = False, layout: str = 'account') -> str:
+    """layout: "account" (platform/account/name), "platform" (platform/name) or "flat" (name)."""
     name = f'{DATE_FIELD}_%(id)s%(playlist_index&_{{}}|)s'
     if include_title:
         name += f'_%(title).{TITLE_LENGTH}s'
-    return f'{platform_key}/{ACCOUNT_FIELD}/{name}.%(ext)s'
+    folders = {'account': f'{platform_key}/{ACCOUNT_FIELD}/', 'platform': f'{platform_key}/', 'flat': ''}
+    return f'{folders.get(layout, folders["account"])}{name}.%(ext)s'
+
+
+# Options window "Quality" (brief 6.4): with ffmpeg the best video and audio
+# up to the height are merged; without it a single file or the two streams.
+QUALITY_FORMATS = {
+    '1080': ('bv*[height<=1080]+ba/b[height<=1080]/b', 'b[height<=1080]/bv*[height<=1080],ba'),
+    '720': ('bv*[height<=720]+ba/b[height<=720]/b', 'b[height<=720]/bv*[height<=720],ba'),
+    'audio': ('ba/b', 'ba/b'),
+}
 
 NO_FFMPEG_MESSAGE = 'ffmpeg is not installed, so some videos are saved as separate video and audio files.'
 _warned = []
@@ -172,7 +183,8 @@ class YtDlpHandler:
 
     # --- internal helpers ----------------------------------------------------
     def _build_opts(self, out_dir: str, options: Dict, cookie_path: Optional[Path]) -> Dict:
-        template = self.outtmpl or layout_template(self.platform_key, bool(options.get('include_title')))
+        template = self.outtmpl or layout_template(self.platform_key, bool(options.get('include_title')),
+                                                   options.get('layout', 'account'))
         base_opts: Dict = {
             # The folder goes in paths, not in the template: trim_file_name
             # shortens the evaluated template, and with the folder inside it a
@@ -200,7 +212,12 @@ class YtDlpHandler:
             # captions, upload time, uploader and counts are often the evidence;
             # thumbnails are written beside the media, never embedded in it
             base_opts['writeinfojson'] = True
+        if options.get('thumbnails', True):
             base_opts['writethumbnail'] = True
+        if options.get('subtitles'):
+            # the uploader's own subtitles in every language, never auto-generated ones
+            base_opts['writesubtitles'] = True
+            base_opts['subtitleslangs'] = ['all']
 
         if cookie_path:
             base_opts['cookiefile'] = str(cookie_path)
@@ -211,7 +228,13 @@ class YtDlpHandler:
                 base_opts['http_headers'] = {'User-Agent': user_agent}
 
         custom = options.get('ytdlp_opts') or {}
-        if 'format' not in custom and not ffmpeg_available(custom.get('ffmpeg_location')):
+        has_ffmpeg = ffmpeg_available(custom.get('ffmpeg_location'))
+        quality = QUALITY_FORMATS.get(options.get('quality') or 'best')
+        if 'format' not in custom and quality:
+            base_opts['format'] = quality[0] if has_ffmpeg else quality[1]
+            if not has_ffmpeg and ',' in quality[1]:
+                base_opts['outtmpl'] = base_opts['outtmpl'].replace('.%(ext)s', '.f%(format_id)s.%(ext)s')
+        elif 'format' not in custom and not has_ffmpeg:
             # yt-dlp's default merges the best video and best audio, which needs
             # ffmpeg. Without it, take a single file with both when the site has
             # one, else save the video and audio streams as two files (unaltered,

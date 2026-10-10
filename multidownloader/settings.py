@@ -33,7 +33,38 @@ def defaults() -> Dict[str, Any]:
         'parallel': 3,
         'include_title': False,
         'keep_awake': True,
+        # Options window (brief 6.4)
+        'quality': 'best',          # best | 1080 | 720 | audio
+        'write_metadata': True,     # post details (.info.json and similar)
+        'thumbnails': True,
+        'subtitles': False,
+        'layout': 'account',        # account | platform | flat
+        'polite': True,             # random pause between links from one platform
+        'theme': 'system',          # system | light | dark
     }
+
+
+QUALITIES = ('best', '1080', '720', 'audio')
+LAYOUTS = ('account', 'platform', 'flat')
+THEMES = ('system', 'light', 'dark')
+
+
+def download_options(prefs: Dict[str, Any], handler: Optional[str]) -> Dict[str, Any]:
+    """The per-link options a backend gets from the user's settings."""
+    opts: Dict[str, Any] = {
+        'quality': prefs.get('quality', 'best'),
+        'write_metadata': prefs.get('write_metadata', True),
+        'thumbnails': prefs.get('thumbnails', True),
+        'subtitles': prefs.get('subtitles', False),
+        'layout': prefs.get('layout', 'account'),
+    }
+    if prefs.get('include_title'):
+        opts['include_title'] = True
+    if handler == 'Instagram':
+        opts['auth'] = 'auto'
+    elif handler not in ('Google Drive', 'Bluesky', None):
+        opts['use_session'] = True  # yt-dlp handlers reuse the stored sign-in
+    return opts
 
 
 _VALIDATORS = {
@@ -43,7 +74,20 @@ _VALIDATORS = {
     'parallel': lambda v: isinstance(v, int) and not isinstance(v, bool) and 1 <= v <= 6,
     'include_title': lambda v: isinstance(v, bool),
     'keep_awake': lambda v: isinstance(v, bool),
+    'quality': lambda v: v in QUALITIES,
+    'write_metadata': lambda v: isinstance(v, bool),
+    'thumbnails': lambda v: isinstance(v, bool),
+    'subtitles': lambda v: isinstance(v, bool),
+    'layout': lambda v: v in LAYOUTS,
+    'polite': lambda v: isinstance(v, bool),
+    'theme': lambda v: v in THEMES,
 }
+
+
+def valid(key: str, value: Any) -> bool:
+    """True when value is usable for the setting key (the check load() applies)."""
+    check = _VALIDATORS.get(key)
+    return bool(check and check(value))
 
 
 def re_geometry(value: str):
@@ -88,4 +132,5 @@ def save(values: Dict[str, Any], path: Optional[Path] = None) -> Path:
     return path
 
 
-__all__ = ['SCHEMA', 'default_output_root', 'defaults', 'load', 'save', 'settings_path']
+__all__ = ['LAYOUTS', 'QUALITIES', 'SCHEMA', 'THEMES', 'default_output_root', 'defaults', 'download_options', 'load',
+           'save', 'settings_path', 'valid']

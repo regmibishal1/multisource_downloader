@@ -15,15 +15,16 @@ from tkinter import filedialog, messagebox, ttk
 
 from typing import Optional
 
-from multidownloader import detect, errors as errors_mod, logs, runs, session_store, settings, signins
+from multidownloader import appdirs, detect, errors as errors_mod, logs, runs, session_store, settings, signins
 from multidownloader.batch import links_from_file
 from multidownloader.awake import keep_awake
 from multidownloader.core import Downloader
 from multidownloader import report
-from multidownloader.gui import crash
+from multidownloader.gui import crash, help as help_menu, theme
+from multidownloader.gui.options import OptionsWindow
 from multidownloader.gui.queue_table import FILTERS, QueueTable
 from multidownloader.gui.signin_sheet import SignInSheet, SignInsWindow, open_folder
-from multidownloader.gui.theme import COLORS, fonts, link_label
+from multidownloader.gui.theme import COLORS, fonts, link_label, px
 from multidownloader.platforms import BY_HANDLER, BY_KEY
 from multidownloader.history import History
 from multidownloader.runner import HostWaiting, Job, JobFinished, JobProgress, JobStarted, Runner, mmss
@@ -35,7 +36,6 @@ APP_TITLE = 'Multisource Downloader'
 # directory the script happened to be started from.
 DEFAULT_OUTPUT_DIR = settings.default_output_root()
 
-COOKIE_SOURCES = {'TikTok', 'Threads', 'Twitter', 'Reddit', 'Facebook', 'YouTube'}
 MAX_LISTED_ERRORS = 10
 MAX_LOG_LINES = 2000
 
@@ -69,11 +69,11 @@ class DownloaderUI:
         self.unfinished = None
         self.prefs = prefs if prefs is not None else settings.defaults()
         root.title(APP_TITLE)
-        root.minsize(760, 560)
+        root.minsize(px(760), px(560))
         if self.prefs.get('window_geometry'):
             root.geometry(self.prefs['window_geometry'])
         else:
-            root.geometry('960x680')
+            root.geometry(f'{px(960)}x{px(680)}')
         f = fonts(root)
 
         self.dir_var = tk.StringVar(value=self.prefs.get('output_root') or settings.default_output_root())
@@ -84,7 +84,7 @@ class DownloaderUI:
         self._summary_job = None
         self._placeholder_on = False
 
-        self.frm = ttk.Frame(self.root, padding=24)
+        self.frm = ttk.Frame(self.root, padding=px(24))
         self.frm.pack(fill=tk.BOTH, expand=True)
         self.frm.columnconfigure(0, weight=1)
 
@@ -94,33 +94,41 @@ class DownloaderUI:
         header.columnconfigure(0, weight=1)
         ttk.Label(header, text='Multisource Downloader', font=f['title']).grid(row=0, column=0, sticky='w')
         self.signin_summary = ttk.Label(header, textvariable=self.signin_summary_var, font=f['caption'])
-        self.signin_summary.grid(row=0, column=1, sticky='e', padx=(0, 8))
+        self.signin_summary.grid(row=0, column=1, sticky='e', padx=(0, px(8)))
         self.signins_btn = ttk.Button(header, text='Sign-ins', command=self.open_signins)
         self.signins_btn.grid(row=0, column=2, sticky='e')
+        self.options_btn = ttk.Button(header, text='Options', command=self.open_options)
+        self.options_btn.grid(row=0, column=3, sticky='e', padx=(px(8), 0))
+        self.help_btn = ttk.Menubutton(header, text='?', width=2)
+        self.help_btn.grid(row=0, column=4, sticky='e', padx=(px(8), 0))
+        self.help_btn['menu'] = help_menu.build_menu(self.help_btn, on_options=self.open_options,
+                                                     on_open_logs=self.open_log_folder,
+                                                     on_status=self.status_var.set)
 
         # shown only when the last run stopped before it finished (brief T20)
         self.resume_var = tk.StringVar()
-        self.resume_bar = ttk.Frame(header, padding=(8, 6), relief='solid', borderwidth=1)
+        self.resume_bar = ttk.Frame(header, padding=(px(8), px(6)), relief='solid', borderwidth=1)
         self.resume_bar.columnconfigure(0, weight=1)
         ttk.Label(self.resume_bar, textvariable=self.resume_var, foreground=COLORS['warning'],
-                  wraplength=520, justify='left').grid(row=0, column=0, sticky='w')
-        ttk.Button(self.resume_bar, text='Resume', command=self.resume_unfinished).grid(row=0, column=1, padx=(8, 4))
+                  wraplength=px(520), justify='left').grid(row=0, column=0, sticky='w')
+        ttk.Button(self.resume_bar, text='Resume', command=self.resume_unfinished).grid(
+            row=0, column=1, padx=(px(8), px(4)))
         ttk.Button(self.resume_bar, text='Dismiss', command=self.dismiss_unfinished).grid(row=0, column=2)
         if offer_resume:
             self.check_unfinished()
 
         # Links (brief 6.1): any pasted text; each link's platform is detected
         links_head = ttk.Frame(self.frm)
-        links_head.grid(row=1, column=0, sticky='ew', pady=(24, 0))
+        links_head.grid(row=1, column=0, sticky='ew', pady=(px(24), 0))
         links_head.columnconfigure(0, weight=1)
         ttk.Label(links_head, text='Links', font=f['section']).grid(row=0, column=0, sticky='w')
         ttk.Label(links_head, text='Paste links or any text that contains them.', font=f['caption'],
-                  foreground=COLORS['text-2']).grid(row=1, column=0, sticky='w', pady=(4, 0))
+                  foreground=COLORS['text-2']).grid(row=1, column=0, sticky='w', pady=(px(4), 0))
         self.import_btn = ttk.Button(links_head, text='Import file...', command=self.import_file)
         self.import_btn.grid(row=0, column=1, rowspan=2, sticky='e')
 
         box = ttk.Frame(self.frm)
-        box.grid(row=2, column=0, sticky='ew', pady=(8, 0))
+        box.grid(row=2, column=0, sticky='ew', pady=(px(8), 0))
         box.columnconfigure(0, weight=1)
         self.links = tk.Text(box, height=6, wrap='none', undo=True, font=f['body'], relief='solid', borderwidth=1,
                              highlightthickness=2, highlightcolor=COLORS['accent'])
@@ -139,44 +147,44 @@ class DownloaderUI:
         self._placeholder(True)
 
         summary = ttk.Frame(self.frm)
-        summary.grid(row=3, column=0, sticky='ew', pady=(8, 0))
+        summary.grid(row=3, column=0, sticky='ew', pady=(px(8), 0))
         summary.columnconfigure(0, weight=1)
         ttk.Label(summary, textvariable=self.summary_var, font=f['caption'], foreground=COLORS['text-2'],
-                  wraplength=760, justify='left').grid(row=0, column=0, sticky='w')
+                  wraplength=px(760), justify='left').grid(row=0, column=0, sticky='w')
         link_label(summary, 'Clear', self.clear_links).grid(row=0, column=1, sticky='e')
 
         # Save to: remembered between runs (F9, F23)
         folder = ttk.Frame(self.frm)
-        folder.grid(row=4, column=0, sticky='ew', pady=(16, 0))
+        folder.grid(row=4, column=0, sticky='ew', pady=(px(16), 0))
         folder.columnconfigure(1, weight=1)
-        ttk.Label(folder, text='Save to').grid(row=0, column=0, sticky='w', padx=(0, 8))
+        ttk.Label(folder, text='Save to').grid(row=0, column=0, sticky='w', padx=(0, px(8)))
         self.dir_entry = ttk.Entry(folder, textvariable=self.dir_var, state='readonly')
         self.dir_entry.grid(row=0, column=1, sticky='ew')
         self.dir_btn = ttk.Button(folder, text='Change...', command=self.select_directory)
-        self.dir_btn.grid(row=0, column=2, sticky='e', padx=(8, 0))
+        self.dir_btn.grid(row=0, column=2, sticky='e', padx=(px(8), 0))
 
         self.notice_label = ttk.Label(self.frm, textvariable=self.notice_var, foreground=COLORS['warning'],
-                                      wraplength=860, justify='left')
-        self.notice_label.grid(row=5, column=0, sticky='w', pady=(8, 0))
+                                      wraplength=px(860), justify='left')
+        self.notice_label.grid(row=5, column=0, sticky='w', pady=(px(8), 0))
 
         buttons = ttk.Frame(self.frm)
-        buttons.grid(row=6, column=0, sticky='e', pady=(16, 0))
-        self.download_btn = ttk.Button(buttons, text='Download', command=self.start_download)
+        buttons.grid(row=6, column=0, sticky='e', pady=(px(16), 0))
+        self.download_btn = ttk.Button(buttons, text='Download', style='Accent.TButton', command=self.start_download)
         self.download_btn.pack(side=tk.LEFT)
         self.download_btn.state(['disabled'])
 
         # Queue (brief F1, 6.1)
         queue_head = ttk.Frame(self.frm)
-        queue_head.grid(row=7, column=0, sticky='ew', pady=(32, 8))
+        queue_head.grid(row=7, column=0, sticky='ew', pady=(px(32), px(8)))
         queue_head.columnconfigure(0, weight=1)
         ttk.Label(queue_head, text='Queue', font=f['section']).grid(row=0, column=0, sticky='w')
-        ttk.Label(queue_head, text='Show:').grid(row=0, column=1, sticky='e', padx=(0, 4))
+        ttk.Label(queue_head, text='Show:').grid(row=0, column=1, sticky='e', padx=(0, px(4)))
         self.filter_var = tk.StringVar(value='All')
         show = ttk.Combobox(queue_head, textvariable=self.filter_var, values=FILTERS, state='readonly', width=9)
         show.grid(row=0, column=2, sticky='e')
         show.bind('<<ComboboxSelected>>', lambda _e: self.table.set_filter(self.filter_var.get()))
         self.retry_btn = ttk.Button(queue_head, text='Retry failed', command=self.retry_failed)
-        self.retry_btn.grid(row=0, column=3, sticky='e', padx=(12, 0))
+        self.retry_btn.grid(row=0, column=3, sticky='e', padx=(px(12), 0))
         self.retry_btn.grid_remove()
 
         self.table = QueueTable(self.frm, on_open=self.open_row, on_menu=self.row_menu)
@@ -185,26 +193,27 @@ class DownloaderUI:
         self.table.tree.bind('<Delete>', lambda _e: self.remove_rows())
 
         footer = ttk.Frame(self.frm)
-        footer.grid(row=9, column=0, sticky='ew', pady=(12, 0))
+        footer.grid(row=9, column=0, sticky='ew', pady=(px(12), 0))
         footer.columnconfigure(1, weight=1)
         # Stop sits on the left, away from the other actions (brief 6.1)
         self.stop_btn = ttk.Button(footer, text='Stop', command=self.ask_stop)
         self.stop_btn.grid(row=0, column=0, sticky='w')
         self.stop_btn.state(['disabled'])
-        ttk.Button(footer, text='Open folder', command=self.open_output).grid(row=0, column=2, sticky='e', padx=(0, 8))
+        self.open_btn = ttk.Button(footer, text='Open folder', command=self.open_output)
+        self.open_btn.grid(row=0, column=2, sticky='e', padx=(0, px(8)))
         self.export_btn = ttk.Button(footer, text='Export report', command=self.export_report)
         self.export_btn.grid(row=0, column=3, sticky='e')
         self.export_btn.state(['disabled'])
 
         # status bar: summary, progress, and the details log (brief F8)
         bar = ttk.Frame(self.frm)
-        bar.grid(row=10, column=0, sticky='ew', pady=(12, 0))
+        bar.grid(row=10, column=0, sticky='ew', pady=(px(12), 0))
         bar.columnconfigure(0, weight=1)
         self.status_label = ttk.Label(bar, textvariable=self.status_var, foreground=COLORS['text-2'],
-                                      wraplength=640, justify='left')
+                                      wraplength=px(640), justify='left')
         self.status_label.grid(row=0, column=0, sticky='w')
-        self.progress = ttk.Progressbar(bar, mode='determinate', length=200)
-        self.progress.grid(row=0, column=1, sticky='e', padx=(12, 12))
+        self.progress = ttk.Progressbar(bar, mode='determinate', length=px(200))
+        self.progress.grid(row=0, column=1, sticky='e', padx=(px(12), px(12)))
         self.progress.grid_remove()
         self.details_link = link_label(bar, 'Show details', self.toggle_details)
         self.details_link.grid(row=0, column=2, sticky='e')
@@ -231,7 +240,81 @@ class DownloaderUI:
         root.bind_all('<Control-l>', lambda _e: self.links.focus_set())
         root.bind_all('<F5>', lambda _e: self.retry_failed())
         root.bind_all('<Control-period>', lambda _e: self.ask_stop())
+        root.bind('<Control-comma>', lambda _e: self.open_options())
+        root.bind('<F1>', lambda _e: help_menu.show_shortcuts(self.root))
+        root.bind('<F6>', lambda _e: self.next_region(1))
+        root.bind('<Shift-F6>', lambda _e: self.next_region(-1))
+        # Alt + the underlined letter selects a button (brief 6.6)
+        for button, index in ((self.download_btn, 0), (self.import_btn, 0), (self.dir_btn, 0),
+                              (self.signins_btn, 0), (self.options_btn, 1), (self.stop_btn, 1),
+                              (self.open_btn, 5), (self.export_btn, 0), (self.retry_btn, 0)):
+            self.mnemonic(button, index)
         self.refresh_signin_summary()
+
+    # --- keyboard ----------------------------------------------------------------
+    def mnemonic(self, button, index: int):
+        letter = button.cget('text')[index].lower()
+        button.configure(underline=index)
+
+        def press(_event):
+            if button.winfo_ismapped() and button.instate(['!disabled']):
+                button.invoke()
+            return 'break'
+
+        for key in (letter, letter.upper()):
+            self.root.bind(f'<Alt-{key}>', press)
+
+    def regions(self):
+        """F6 order: the Links box, the queue, the main buttons, the header."""
+        action = self.stop_btn if self._runner is not None else self.download_btn
+        return [self.links, self.table.tree, action, self.signins_btn]
+
+    def next_region(self, step: int = 1):
+        regions = self.regions()
+        focus = self.root.focus_get()
+        current = -1
+        for i, widget in enumerate(regions):
+            node = focus
+            while node is not None:
+                if node is widget:
+                    current = i
+                    break
+                node = getattr(node, 'master', None)
+            if current >= 0:
+                break
+        for offset in range(1, len(regions) + 1):
+            widget = regions[(current + step * offset) % len(regions)]
+            usable = widget.instate(['!disabled']) if isinstance(widget, ttk.Widget) else True
+            if usable and widget.winfo_ismapped():
+                widget.focus_set()
+                return widget
+        return None
+
+    def open_options(self):
+        if getattr(self, '_options_window', None) is not None and self._options_window.winfo_exists():
+            self._options_window.lift()
+            self._options_window.focus_set()
+            return
+        theme_before = self.prefs.get('theme')
+        saved = {}
+
+        def on_save(_prefs):
+            saved['yes'] = True
+            self.save_prefs()
+
+        self._options_window = OptionsWindow(self.root, self.prefs, on_save=on_save)
+        self.root.wait_window(self._options_window)
+        self._options_window = None
+        if saved:
+            note = ' The new look applies the next time you open the app.' if self.prefs.get('theme') != theme_before \
+                else ''
+            self.status_var.set('Options saved. They apply to the next download.' + note)
+        self.options_btn.focus_set()
+
+    def open_log_folder(self):
+        folder = appdirs.log_dir()
+        folder.mkdir(parents=True, exist_ok=True)
+        open_folder(folder)
 
     # --- the links box ------------------------------------------------------------
     PLACEHOLDER = 'Paste links here. One per line, or any text that contains them.'
@@ -318,7 +401,7 @@ class DownloaderUI:
         self.unfinished = runs.last_unfinished_run()
         if self.unfinished:
             self.resume_var.set('! ' + self.unfinished.message())
-            self.resume_bar.grid(row=1, column=0, columnspan=3, sticky='ew', pady=(10, 0))
+            self.resume_bar.grid(row=1, column=0, columnspan=5, sticky='ew', pady=(px(10), 0))
         else:
             self.resume_bar.grid_remove()
 
@@ -432,31 +515,26 @@ class DownloaderUI:
         self.status_var.set(f'Saving 1 of {len(urls)}. 0 saved, 0 failed.')
         threading.Thread(
             target=self._download_with_core,
-            args=(downloader, run, list(zip(urls, handlers)), source),
+            args=(downloader, run, list(zip(urls, handlers)), source, dict(self.prefs)),
             daemon=True,
         ).start()
 
-    @staticmethod
-    def _options(handler):
-        # Google Drive needs no option: public first, the saved sign-in only
-        # when Drive refuses the link
-        opts = {}
-        if handler == 'Instagram':
-            opts['auth'] = 'auto'
-        if handler in COOKIE_SOURCES:
-            opts['use_session'] = True
-        return opts
+    def _download_with_core(self, downloader, run, links, source, prefs=None):
+        """Download thread: runs the scheduler and reports through self._events only.
 
-    def _download_with_core(self, downloader, run, links, source):
-        """Download thread: runs the scheduler and reports through self._events only."""
+        prefs is a copy taken when the run started, so Options changes apply to the next run.
+        """
+        prefs = prefs if prefs is not None else settings.defaults()
         urls = [url for url, _handler in links]
-        runner = Runner(run, downloader, on_event=self._events.put)
+        # "polite" off drops the short pause between links; Instagram's longer one always stays
+        runner = Runner(run, downloader, on_event=self._events.put, max_parallel=prefs.get('parallel', 3),
+                        default_delay=None if prefs.get('polite', True) else (0.0, 0.0))
         self._runner = runner
-        jobs = [Job(url, handler, self._options(handler)) for url, handler in links]
+        jobs = [Job(url, handler, settings.download_options(prefs, handler)) for url, handler in links]
         try:
             # hold off system sleep for the whole run (brief T21); on this thread,
             # because Windows applies it per thread
-            with keep_awake():
+            with keep_awake(prefs.get('keep_awake', True)):
                 results = runner.run(jobs)
         except BaseException:
             # the run stays unfinished on disk, so it is offered for resuming;
@@ -693,7 +771,7 @@ class DownloaderUI:
             self.details_link.configure(text='Show details')
             self.prefs['details_open'] = False
         else:
-            self.details.grid(row=11, column=0, sticky='ew', pady=(8, 0))
+            self.details.grid(row=11, column=0, sticky='ew', pady=(px(8), 0))
             self.details_link.configure(text='Hide details')
             self.prefs['details_open'] = True
 
@@ -721,10 +799,10 @@ def confirm_stop(parent, waiting: int) -> bool:
     dialog.title('Stop downloading?')
     dialog.transient(parent)
     dialog.resizable(False, False)
-    body = ttk.Frame(dialog, padding=24)
+    body = ttk.Frame(dialog, padding=px(24))
     body.pack(fill=tk.BOTH, expand=True)
     noun = 'link is' if waiting == 1 else 'links are'
-    ttk.Label(body, wraplength=360, justify='left',
+    ttk.Label(body, wraplength=px(360), justify='left',
               text=f'{waiting} {noun} still waiting. The current file will be removed if it is not finished.'
               ).pack(anchor='w')
     answer = {'stop': False}
@@ -734,9 +812,9 @@ def confirm_stop(parent, waiting: int) -> bool:
         dialog.destroy()
 
     buttons = ttk.Frame(body)
-    buttons.pack(anchor='e', pady=(16, 0))
+    buttons.pack(anchor='e', pady=(px(16), 0))
     keep = ttk.Button(buttons, text='Keep downloading', command=dialog.destroy)
-    keep.pack(side=tk.LEFT, padx=(0, 8))
+    keep.pack(side=tk.LEFT, padx=(0, px(8)))
     ttk.Button(buttons, text='Stop', command=stop).pack(side=tk.LEFT)
     dialog.bind('<Escape>', lambda _e: dialog.destroy())
     keep.focus_set()
@@ -749,8 +827,11 @@ def main():
     # one rotating, redacted log file in the per-user log folder (brief T15)
     logs.setup()
     session_store.migrate_legacy_sessions()
+    theme.enable_dpi_awareness()  # before the first window
+    prefs = settings.load()
     root = tk.Tk()
-    app = DownloaderUI(root, prefs=settings.load())
+    theme.apply(root, prefs.get('theme', 'system'))  # before any widget, which takes its colours when made
+    app = DownloaderUI(root, prefs=prefs)
 
     def close():
         app.save_prefs()

@@ -12,7 +12,7 @@ from tkinter import ttk
 from typing import Callable, Dict, List, Optional
 
 from .. import detect
-from .theme import COLORS, fonts
+from .theme import COLORS, fonts, px
 
 GLYPHS = {
     'waiting': '… Waiting',
@@ -84,9 +84,9 @@ class QueueTable(ttk.Frame):
         self.on_menu = on_menu
         f = fonts(self)
         style = ttk.Style(self)
-        style.configure('Queue.Treeview', rowheight=28, font=f['body'])
+        style.configure('Queue.Treeview', rowheight=px(28), font=f['body'])
         style.configure('Queue.Treeview.Heading', font=f['bold'])
-        style.map('Queue.Treeview', background=[('selected', COLORS['accent'])], foreground=[('selected', '#FFFFFF')])
+        style.map('Queue.Treeview', background=[('selected', COLORS['accent'])], foreground=[('selected', COLORS['on-accent'])])
 
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
