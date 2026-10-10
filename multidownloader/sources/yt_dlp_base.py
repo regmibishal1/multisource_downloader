@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -16,6 +17,22 @@ except Exception:  # pragma: no cover - module might be missing in minimal envs
     YTDLP_AVAILABLE = False
 
 from .. import session_store, signins
+
+
+NO_FFMPEG_MESSAGE = 'ffmpeg is not installed, so some videos are saved as separate video and audio files.'
+_warned = []
+
+
+def ffmpeg_available(location=None) -> bool:
+    if location:
+        return os.path.exists(location)
+    return shutil.which('ffmpeg') is not None
+
+
+def _warn_no_ffmpeg(logger) -> None:
+    if not _warned:
+        _warned.append(True)
+        logger.warning(NO_FFMPEG_MESSAGE)
 
 
 class YtDlpHandler:
@@ -86,6 +103,14 @@ class YtDlpHandler:
                 base_opts['http_headers'] = {'User-Agent': user_agent}
 
         custom = options.get('ytdlp_opts') or {}
+        if 'format' not in custom and not ffmpeg_available(custom.get('ffmpeg_location')):
+            # yt-dlp's default merges the best video and best audio, which needs
+            # ffmpeg. Without it, take a single file with both when the site has
+            # one, else save the video and audio streams as two files (unaltered,
+            # with the format id in the name so neither overwrites the other).
+            base_opts['format'] = 'best/bestvideo*,bestaudio'
+            base_opts['outtmpl'] = base_opts['outtmpl'].replace('.%(ext)s', '.f%(format_id)s.%(ext)s')
+            _warn_no_ffmpeg(self.logger)
         base_opts.update(custom)
         base_opts.update(self.extra_yt_opts(options))
 
@@ -113,4 +138,4 @@ class YtDlpHandler:
         return signins.cookie_file_for_download(self.source_key)
 
 
-__all__ = ['YtDlpHandler', 'YTDLP_AVAILABLE']
+__all__ = ['YtDlpHandler', 'YTDLP_AVAILABLE', 'NO_FFMPEG_MESSAGE', 'ffmpeg_available']

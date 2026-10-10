@@ -16,6 +16,7 @@ from multidownloader.core import Downloader
 from multidownloader.gui.signin_sheet import SignInSheet, SignInsWindow
 from multidownloader.gui.theme import COLORS
 from multidownloader.platforms import BY_HANDLER
+from multidownloader.runs import Run
 
 SOURCE_CHOICES = [
     'Google Drive',
@@ -132,17 +133,23 @@ class DownloaderUI:
         self.notice_var.set('\n'.join(f'! {w} Use Sign-ins to add one.' for w in warnings))
 
         downloader = Downloader(out_dir, logger=logging.getLogger('multidownloader'))
+        try:
+            run = Run(out_dir)
+        except OSError as exc:
+            messagebox.showerror('Cannot save here', f'Could not write to {out_dir}. Choose another folder.\n\n{exc}',
+                                 parent=self.root)
+            return
 
         # source was read above: the worker thread must not read Tk variables,
         # and changing the dropdown mid-run must not reroute remaining links
         self.download_btn.state(['disabled'])
         threading.Thread(
             target=self._download_with_core,
-            args=(downloader, urls, source),
+            args=(downloader, run, urls, source),
             daemon=True,
         ).start()
 
-    def _download_with_core(self, downloader, urls, source):
+    def _download_with_core(self, downloader, run, urls, source):
         errors = []
         for i, url in enumerate(urls, 1):
             # Google Drive needs no option: public first, the saved sign-in
@@ -155,25 +162,28 @@ class DownloaderUI:
 
             self.root.after(0, self.status_var.set, f'Saving {i} of {len(urls)}: {url}')
             logging.info('Delegating download to core: %s %s %s', source, url, opts)
-            try:
-                downloader.download(source, url, opts)
-                logging.info('Download finished for %s', url)
-            except Exception as exc:
-                errors.append((url, str(exc)))
-                logging.error('Core download error for %s: %s', url, exc)
+            # staging, hashing and the manifest happen inside run.download
+            result = run.download(downloader, source, url, opts)
+            if result.status == 'saved':
+                logging.info('Saved %s: %s file(s)', url, len(result.files))
+            else:
+                errors.append((url, result.error_detail or result.error_message or ''))
+                logging.error('Core download error for %s: %s', url, result.error_message)
 
-        self.root.after(0, self._run_finished, source, urls, errors)
+        run.finish()
+        self.root.after(0, self._run_finished, source, urls, errors, run)
 
-    def _run_finished(self, source, urls, errors):
+    def _run_finished(self, source, urls, errors, run=None):
         """One summary for the whole run instead of a popup per failed link."""
         self.download_btn.state(['!disabled'])
         self.refresh_signin_summary()
         saved = len(urls) - len(errors)
+        report = f' Report: {run.dir}' if run else ''
         if not errors:
-            self.status_var.set(f'Done. {saved} saved.')
+            self.status_var.set(f'Done. {saved} saved.{report}')
             self.root.title('Multi-Source Downloader')
             return
-        self.status_var.set(f'Done. {saved} saved, {len(errors)} failed.')
+        self.status_var.set(f'Done. {saved} saved, {len(errors)} failed.{report}')
         self.root.title(f'Done: {saved} saved, {len(errors)} failed - Multi-Source Downloader')
 
         platform = BY_HANDLER.get(source)

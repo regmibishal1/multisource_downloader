@@ -16,10 +16,12 @@ class FakeDownloader:
         self.calls = []
         self.fail_tokens = set(fail_tokens or [])
 
-    def download(self, source_name, url, options):
+    def download(self, source_name, url, options, out_dir=None):
         self.calls.append((source_name, url, options))
         if any(token in url for token in self.fail_tokens):
             raise RuntimeError('simulated failure')
+        if out_dir:  # behave like a real download: leave a file behind
+            (Path(out_dir) / f'{len(self.calls)}.mp4').write_bytes(url.encode())
 
 
 class BatchTests(unittest.TestCase):
