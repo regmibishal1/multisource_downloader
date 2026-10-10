@@ -50,6 +50,8 @@ If you get "Sign in" errors, import your YouTube cookies:
 3. In the app, click **"Import cookies.txt"** and select your file
 4. Download again!
 
+The app keeps a copy of the imported file in `%LOCALAPPDATA%\multisource-downloader\portable\cookies.txt`, so you only import it once. Delete that file to remove the sign-in.
+
 ## License
 
 MIT License - See the main project LICENSE file.

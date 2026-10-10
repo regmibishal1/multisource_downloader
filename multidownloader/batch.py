@@ -12,6 +12,8 @@ from urllib.parse import urlparse
 
 from .core import Downloader
 
+_log = logging.getLogger('multidownloader.batch')
+
 SUPPORTED_SOURCES = {
     'Google Drive',
     'Instagram',
@@ -23,29 +25,51 @@ SUPPORTED_SOURCES = {
     'YouTube',
 }
 
-ALIAS_MAP: Tuple[Tuple[str, str], ...] = (
+# Hostnames are matched exactly or as a dot-suffix (www.x.com matches x.com,
+# dropbox.com does not).
+HOST_MAP: Tuple[Tuple[str, str], ...] = (
     ('drive.google.com', 'Google Drive'),
     ('docs.google.com', 'Google Drive'),
+    ('googleusercontent.com', 'Google Drive'),
+    ('instagram.com', 'Instagram'),
+    ('instagr.am', 'Instagram'),
+    ('ddinstagram.com', 'Instagram'),
+    ('threads.net', 'Threads'),
+    ('threads.com', 'Threads'),
+    ('tiktok.com', 'TikTok'),
+    ('douyin.com', 'TikTok'),
+    ('twitter.com', 'Twitter'),
+    ('x.com', 'Twitter'),
+    ('fxtwitter.com', 'Twitter'),
+    ('vxtwitter.com', 'Twitter'),
+    ('fixupx.com', 'Twitter'),
+    ('fixvx.com', 'Twitter'),
+    ('reddit.com', 'Reddit'),
+    ('redd.it', 'Reddit'),
+    ('facebook.com', 'Facebook'),
+    ('fb.com', 'Facebook'),
+    ('fb.watch', 'Facebook'),
+    ('fbcdn.net', 'Facebook'),
+    ('youtube.com', 'YouTube'),
+    ('youtu.be', 'YouTube'),
+    ('youtube-nocookie.com', 'YouTube'),
+    ('youtubekids.com', 'YouTube'),
+)
+
+# Source hints come from the scraper's group names ("twitter", "Google Drive"),
+# not from URLs, so a substring match is fine here.
+HINT_ALIASES: Tuple[Tuple[str, str], ...] = (
     ('googledrive', 'Google Drive'),
-    ('googleusercontent', 'Google Drive'),
+    ('google drive', 'Google Drive'),
+    ('gdrive', 'Google Drive'),
     ('instagram', 'Instagram'),
-    ('instagr', 'Instagram'),
-    ('ddinstagram', 'Instagram'),
     ('threads', 'Threads'),
     ('tiktok', 'TikTok'),
     ('douyin', 'TikTok'),
     ('twitter', 'Twitter'),
-    ('x.com', 'Twitter'),
-    ('fxtwitter', 'Twitter'),
-    ('vxtwitter', 'Twitter'),
     ('reddit', 'Reddit'),
-    ('redd.it', 'Reddit'),
     ('facebook', 'Facebook'),
-    ('fb.watch', 'Facebook'),
-    ('fbcdn', 'Facebook'),
     ('youtube', 'YouTube'),
-    ('youtu.be', 'YouTube'),
-    ('youtubekids', 'YouTube'),
 )
 
 DEFAULT_OUTPUT_DIR = Path('downloads')
@@ -62,18 +86,39 @@ def normalize_url(url: str) -> str:
 
 
 def detect_handler(source_hint: str, url: str) -> Optional[str]:
-    """Return the Downloader handler name for a given item or None if unsupported."""
-    candidates = [source_hint or '', urlparse(url).netloc]
-    for value in candidates:
-        handler = match_alias(value)
-        if handler:
+    """Return the Downloader handler name for a given item or None if unsupported.
+
+    The URL decides. The scraper's source hint is only used when the host is
+    unknown (for example a shortened link).
+    """
+    from_url = match_host(url)
+    from_hint = match_alias(source_hint)
+    if from_url:
+        if from_hint and from_hint != from_url:
+            _log.warning('Source hint %r disagrees with URL %s; using %s', source_hint, url, from_url)
+        return from_url
+    return from_hint
+
+
+def match_host(url: str) -> Optional[str]:
+    try:
+        host = (urlparse(url).hostname or '').lower().rstrip('.')
+    except ValueError:
+        return None
+    if not host:
+        return None
+    for domain, handler in HOST_MAP:
+        if host == domain or host.endswith('.' + domain):
             return handler
     return None
 
 
 def match_alias(value: str) -> Optional[str]:
-    value = (value or '').lower()
-    for alias, handler in ALIAS_MAP:
+    value = (value or '').strip().lower()
+    if '.' in value and ' ' not in value:
+        # domain-shaped hint such as "x.com": match it like a host
+        return match_host(value if '//' in value else 'https://' + value)
+    for alias, handler in HINT_ALIASES:
         if alias in value:
             return handler
     return None
@@ -224,6 +269,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if result['errors']:
         logger.error('Some downloads failed. See log for details.')
         return 1
+    unsupported = sum(1 for *_rest, reason in result['skipped'] if reason == 'unsupported')
+    if result['attempted'] == 0 and unsupported == len(result['skipped']):
+        logger.error('Nothing was attempted: %s link(s) are from unsupported sites.', unsupported)
+        return 2
     return 0
 
 

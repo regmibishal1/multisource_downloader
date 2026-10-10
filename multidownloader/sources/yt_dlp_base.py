@@ -79,7 +79,10 @@ class YtDlpHandler:
             'noplaylist': True,
             'quiet': True,
             'no_warnings': True,
-            'retries': 2,
+            'retries': 10,
+            'fragment_retries': 10,
+            'continuedl': True,
+            'socket_timeout': 30,
             'concurrent_fragment_downloads': 2,
         }
 
@@ -108,8 +111,12 @@ class YtDlpHandler:
         if not use_session:
             return None
 
+        # Only use the saved cookies file when the user imported one. Pointing
+        # yt-dlp at a missing file makes it save anonymous visitor cookies
+        # there afterwards, which then look like a sign-in.
         cookie_path = session_store.default_cookie_path(self.source_key)
-        cookie_path.parent.mkdir(parents=True, exist_ok=True)
+        if not cookie_path.is_file():
+            return None
         return cookie_path
 
 

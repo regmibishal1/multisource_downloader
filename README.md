@@ -43,10 +43,11 @@ Quick start
 UI notes
 --------
 
+- Files are saved to `Downloads\Multisource` in your home folder unless you choose another folder.
 - Select any supported source from the dropdown. Additional options appear when a source needs them (e.g., Google Drive public vs authenticated, Instagram auth mode, cookie import button for yt-dlp sources).
-- Instagram "Auto" mode silently reuses the cached session in `.sessions/Instagram/`. Use "Authenticated (prompt now)" the first time to sign in and save the session.
-- For yt-dlp backed platforms (TikTok, Threads, Twitter/X, Reddit, Facebook, YouTube) you can import a browser `cookies.txt` once; the UI copies it into `.sessions/<Source>/cookies.txt` for reuse.
-- Google Drive authenticated downloads reuse cached PyDrive2 credentials stored in `.sessions/GoogleDrive/credentials.json`. Keep your `client_secrets.json` in the project root or copy it into `.sessions/GoogleDrive/` so the handler can locate it during the auth flow.
+- Instagram "Auto" mode silently reuses the cached session in `multidownloader/.sessions/instagram/`. Use "Authenticated (prompt now)" the first time to sign in and save the session.
+- For yt-dlp backed platforms (TikTok, Threads, Twitter/X, Reddit, Facebook, YouTube) you can import a browser `cookies.txt` once; the UI copies it into `multidownloader/.sessions/<source>/cookies.txt` for reuse. Downloads only use cookies once you have imported a file. Older versions created this file automatically after any download, so if you never imported cookies but the file exists, delete it.
+- Google Drive authenticated downloads reuse cached PyDrive2 credentials stored in `multidownloader/.sessions/googledrive/credentials.json`. Keep your `client_secrets.json` in the project root or copy it into `multidownloader/.sessions/googledrive/` so the handler can locate it during the auth flow.
 
 Batch CLI (loot_report_scraper integration)
 ------------------------------------------
@@ -62,14 +63,15 @@ Options:
 - `--limit` / `--per-source-limit` restrict how many links are attempted.
 - `--dry-run` prints the plan without downloading.
 - Unsupported hosts are reported in the summary so you can triage manually.
+- Exit codes: `0` everything attempted succeeded, `1` some downloads failed, `2` nothing was attempted because every link was from an unsupported site.
 
 Sessions and credential storage
 -------------------------------
 
-All reusable auth artifacts live under `multidownloader/.sessions/` (already ignored by git):
-- `Instagram/`: saved Instaloader `.session` files and metadata.
-- `GoogleDrive/credentials.json`: PyDrive2 credential cache.
-- `<Source>/cookies.txt`: browser-exported cookies for yt-dlp handlers.
+All reusable auth artifacts live under `multidownloader/.sessions/` (already ignored by git). Folder names are the source name in lower case, with spaces and other symbols replaced by `_`:
+- `instagram/`: saved Instaloader `.session` files and metadata.
+- `googledrive/credentials.json`: PyDrive2 credential cache.
+- `<source>/cookies.txt` (for example `twitter/`, `youtube/`): browser-exported cookies for yt-dlp handlers.
 
 The helpers in `multidownloader.session_store` read/write these files and are used by the handlers automatically.
 

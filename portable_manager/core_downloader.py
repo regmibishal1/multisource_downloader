@@ -91,7 +91,8 @@ class PortableDownloader:
         self.logger.info(f"Output: {self.output_dir}")
 
         ydl_opts = {
-            'outtmpl': os.path.join(self.output_dir, '%(title)s.%(ext)s'),
+            # the id keeps two videos with the same title from overwriting each other
+            'outtmpl': os.path.join(self.output_dir, '%(title)s [%(id)s].%(ext)s'),
             'noplaylist': True,
             'quiet': False,
             'no_warnings': False,

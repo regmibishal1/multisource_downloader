@@ -9,6 +9,7 @@ import os
 import shutil
 import threading
 import tkinter as tk
+from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from multidownloader.core import Downloader
@@ -37,6 +38,10 @@ INSTAGRAM_AUTH_CHOICES = [
     'Unauthenticated only',
 ]
 
+# Shown in the folder field from the start so files never land in whatever
+# directory the script happened to be started from.
+DEFAULT_OUTPUT_DIR = str(Path.home() / 'Downloads' / 'Multisource')
+
 COOKIE_SOURCES = {'TikTok', 'Threads', 'Twitter', 'Reddit', 'Facebook', 'YouTube'}
 
 
@@ -46,7 +51,7 @@ class DownloaderUI:
         root.title('Multi-Source Downloader')
 
         self.urls_var = tk.StringVar()
-        self.dir_var = tk.StringVar()
+        self.dir_var = tk.StringVar(value=DEFAULT_OUTPUT_DIR)
         self.status_var = tk.StringVar()
         self.source_var = tk.StringVar(value=SOURCE_CHOICES[0])
         self.method_var = tk.StringVar(value='Public (gdown)')
@@ -65,7 +70,7 @@ class DownloaderUI:
 
         self.dir_btn = ttk.Button(self.frm, text='Select Download Directory', command=self.select_directory)
         self.dir_btn.grid(row=2, column=0, sticky='e', pady=(0, 10), padx=(0, 5))
-        self.dir_entry = ttk.Entry(self.frm, textvariable=self.dir_var, state='readonly', width=40)
+        self.dir_entry = ttk.Entry(self.frm, textvariable=self.dir_var, state='readonly', width=50)
         self.dir_entry.grid(row=2, column=1, sticky='w', pady=(0, 10), padx=(0, 5))
 
         ttk.Label(self.frm, text='Source:').grid(row=3, column=0, sticky='e', pady=(0, 5), padx=(0, 5))
@@ -156,7 +161,7 @@ class DownloaderUI:
             logging.warning('No URLs entered for download')
             return
 
-        out_dir = self.dir_var.get() or os.getcwd()
+        out_dir = self.dir_var.get() or DEFAULT_OUTPUT_DIR
         os.makedirs(out_dir, exist_ok=True)
         logging.info('Starting download for URLs: %s -> %s', urls, out_dir)
 

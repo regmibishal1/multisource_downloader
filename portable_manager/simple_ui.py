@@ -13,7 +13,26 @@ import webbrowser
 import ctypes
 import logging
 import queue
+import sys
 from core_downloader import PortableDownloader
+
+
+def _cookie_store_path():
+    """Where imported cookies are kept between launches.
+
+    A one-file exe unpacks to a temp folder that is deleted on exit, so a file
+    next to __file__ is lost on every restart. Use the per-user data folder.
+    """
+    base = os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"), ".local", "share")
+    return os.path.join(base, "multisource-downloader", "portable", "cookies.txt")
+
+
+def _legacy_cookie_paths():
+    """Older builds kept cookies.txt next to the script or the exe."""
+    paths = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")]
+    if getattr(sys, "frozen", False):
+        paths.append(os.path.join(os.path.dirname(sys.executable), "cookies.txt"))
+    return paths
 
 # Enable high-DPI awareness on Windows for crisp UI
 try:
@@ -137,10 +156,10 @@ class SimpleDownloaderUI:
         self.log_queue.put(message)
 
     def _check_existing_cookies(self):
-        """Check if cookies.txt exists in app directory."""
-        local_cookie = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
-        if os.path.exists(local_cookie):
-            self.cookie_file = local_cookie
+        """Check for a previously imported cookies.txt."""
+        found = next((p for p in [_cookie_store_path(), *_legacy_cookie_paths()] if os.path.exists(p)), None)
+        if found:
+            self.cookie_file = found
             self.cookie_status_var.set("cookies.txt loaded")
             self.cookie_status.config(foreground="green")
             self._log("Found existing cookies.txt file")
@@ -153,7 +172,8 @@ class SimpleDownloaderUI:
         )
         if path:
             try:
-                dest = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
+                dest = _cookie_store_path()
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
                 shutil.copy2(path, dest)
                 self.cookie_file = dest
                 self.cookie_status_var.set("cookies.txt imported")
