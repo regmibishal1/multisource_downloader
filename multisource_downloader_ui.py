@@ -13,7 +13,7 @@ import threading
 import time
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from typing import Optional
 
@@ -247,6 +247,23 @@ class DownloaderUI:
         self.retry_btn.grid(row=0, column=3, sticky='e', padx=(px(12), 0))
         self.retry_btn.grid_remove()
 
+        # notes for the next run (brief F27), collapsed by default
+        self.notes_link = link_label(queue_head, 'Add notes (optional)', self.toggle_notes)
+        self.notes_link.grid(row=1, column=0, sticky='w', pady=(px(4), 0))
+        self.notes_panel = ttk.Frame(queue_head)
+        self.notes_panel.columnconfigure(1, weight=1)
+        self.note_vars = {key: tk.StringVar() for key in runs.NOTE_FIELDS}
+        for i, (key, label) in enumerate((('topic', 'Event or topic'), ('where', 'Where (place)'),
+                                          ('collected_by', 'Collected by (name or pseudonym)'), ('notes', 'Notes'))):
+            ttk.Label(self.notes_panel, text=label).grid(row=i, column=0, sticky='w', padx=(0, px(8)), pady=px(2))
+            ttk.Entry(self.notes_panel, textvariable=self.note_vars[key]).grid(row=i, column=1, sticky='ew',
+                                                                             pady=px(2))
+        ttk.Label(self.notes_panel, text='Notes stay in this folder. Leave out names if sharing them could put '
+                                         'someone at risk.', font=f['caption'], foreground=COLORS['text-2'],
+                  wraplength=px(760), justify='left').grid(row=4, column=0, columnspan=2, sticky='w',
+                                                           pady=(px(4), 0))
+        self._pending_notes = {}  # link notes added before the run that will hold them starts
+
         self.table = QueueTable(self.frm, on_open=self.open_row, on_menu=self.row_menu)
         self.table.grid(row=8, column=0, sticky='nsew')
         self.frm.rowconfigure(8, weight=1)
@@ -296,6 +313,7 @@ class DownloaderUI:
         if self.prefs.get('details_open'):
             self.toggle_details()
         self._last_run = None
+        self._run_urls = set()
 
         # the download thread never touches Tk: it queues events, read here
         self._events = queue.Queue()
@@ -430,6 +448,33 @@ class DownloaderUI:
                 widget.focus_set()
                 return widget
         return None
+
+    # --- notes (brief F27) ------------------------------------------------------------
+    def toggle_notes(self):
+        if self.notes_panel.grid_info():
+            self.notes_panel.grid_remove()
+            self.notes_link.configure(text='Add notes (optional)')
+        else:
+            self.notes_panel.grid(row=2, column=0, columnspan=4, sticky='ew', pady=(px(8), 0))
+            self.notes_link.configure(text='Hide notes')
+
+    def current_notes(self) -> dict:
+        return runs.clean_notes({key: var.get() for key, var in self.note_vars.items()})
+
+    def add_note(self, row):
+        run = self._last_run if self._last_run is not None and row.url in self._run_urls else None
+        current = (run.notes['links'].get(row.url) if run else self._pending_notes.get(row.url)) or ''
+        text = simpledialog.askstring('Add note', 'Note for this link. Leave out names if sharing them could put '
+                                      'someone at risk.', initialvalue=current, parent=self.root)
+        if text is None:
+            return
+        if run is not None:
+            run.set_link_note(row.url, text)
+        elif text.strip():
+            self._pending_notes[row.url] = text.strip()
+        else:
+            self._pending_notes.pop(row.url, None)
+        self.status_var.set('Note saved.' if text.strip() else 'Note removed.')
 
     def open_options(self):
         if getattr(self, '_options_window', None) is not None and self._options_window.winfo_exists():
@@ -652,7 +697,7 @@ class DownloaderUI:
             # links saved in earlier runs are recorded as already saved, not
             # downloaded again; the run is recorded so it can be resumed if it stops
             run = Run(out_dir, history=History(), force=force, last_run_pointer=runs.default_last_run_pointer(),
-                      anchor_path=custody.default_anchor_path())
+                      anchor_path=custody.default_anchor_path(), notes=self.current_notes())
         except OSError as exc:
             messagebox.showerror('Cannot save here', f'Could not write to {out_dir}. Choose another folder.\n\n{exc}',
                                  parent=self.root)
@@ -660,6 +705,10 @@ class DownloaderUI:
         handlers = list(handlers) if handlers else [(detect.platform_for_url(u) or _NONE).handler for u in urls]
         run.plan([{'url': url, 'handler': handler} for url, handler in zip(urls, handlers)] +
                  [{'url': url, 'handler': None} for url in unsupported])
+        for url in list(self._pending_notes):
+            if url in urls or url in unsupported:
+                run.set_link_note(url, self._pending_notes.pop(url))
+        self._run_urls = set(urls) | set(unsupported)
         if keep_queue:
             self.table.requeue(urls)
         else:
@@ -903,6 +952,7 @@ class DownloaderUI:
         menu.add_command(label='Open folder', state='normal' if path and path.parent.exists() else 'disabled',
                          command=lambda: open_folder(path.parent))
         menu.add_command(label='Copy link', command=lambda: self._copy(row.url))
+        menu.add_command(label='Add note...', command=lambda: self.add_note(row))
         if row.state == 'failed' and row.result is not None:
             menu.add_command(label='Copy error', command=lambda: self._copy(
                 f'{row.result.error_message}\n{row.result.error_detail or ""}'.strip()))

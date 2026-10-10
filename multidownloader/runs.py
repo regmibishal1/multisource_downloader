@@ -54,8 +54,26 @@ BACKENDS = {
 
 CSV_FIELDS = (
     'run_id', 'status', 'platform', 'input_url', 'normalized_url', 'backend', 'files', 'bytes', 'sha256',
-    'error_kind', 'error_message', 'started_at', 'finished_at', 'app_version', 'backend_version',
+    'error_kind', 'error_message', 'started_at', 'finished_at', 'app_version', 'backend_version', 'note',
 )
+# run notes (brief F27, after WITNESS: what, where, who, why)
+NOTE_FIELDS = ('topic', 'where', 'collected_by', 'notes')
+NOTES_FILENAME = 'notes.json'
+
+
+def clean_notes(notes: Optional[Dict]) -> Dict[str, str]:
+    """Only the known fields, trimmed; empty ones left out."""
+    return {k: str(notes[k]).strip() for k in NOTE_FIELDS if notes and str(notes.get(k) or '').strip()}
+
+
+def describe_notes(notes: Optional[Dict]) -> str:
+    """One line for a package's External-Description, for example "Topic: Rally. Where: Kathmandu."."""
+    labels = {'topic': 'Topic', 'where': 'Where', 'collected_by': 'Collected by', 'notes': 'Notes'}
+    parts = []
+    for key, value in clean_notes(notes).items():
+        text = ' '.join(value.split())  # one line: bag-info values cannot hold line breaks
+        parts.append(f'{labels[key]}: {text}' + ('' if text.endswith(('.', '!', '?')) else '.'))
+    return ' '.join(parts)
 
 
 def utc_now() -> str:
@@ -123,6 +141,7 @@ class JobResult:
     source_hint: Optional[str] = None
     skip_reason: Optional[str] = None
     previous: Optional[Dict] = None  # for already_saved: when and where it was saved before
+    notes: Optional[Dict] = None     # {"run": {...}, "link": "..."}: the collector's notes (brief F27)
 
     def to_dict(self) -> Dict:
         return asdict(self)
@@ -213,7 +232,8 @@ class Run:
     """Downloads for one batch of links, with staging and a manifest."""
 
     def __init__(self, out_root, *, run_id: Optional[str] = None, history=None, force: bool = False,
-                 last_run_pointer: Optional[Path] = None, anchor_path: Optional[Path] = None):
+                 last_run_pointer: Optional[Path] = None, anchor_path: Optional[Path] = None,
+                 notes: Optional[Dict] = None):
         """last_run_pointer: where plan() records this run for resuming; only the app's own entry
         points pass one (runs.default_last_run_pointer()), so tests never touch user data.
         anchor_path: anchors.log for the custody log's head (custody.default_anchor_path()), same rule."""
@@ -236,7 +256,12 @@ class Run:
         self._planned = False
         # what happened to the files, in order, with a hash chain (brief F29)
         self.custody = CustodyLog(self.dir / CUSTODY_FILENAME, self.run_id, anchor_path=anchor_path)
-        self.custody.append('run_started', {'app': f'multisource-downloader {__version__}'})
+        self.notes = {'run': clean_notes(notes), 'links': {}}
+        started = {'app': f'multisource-downloader {__version__}'}
+        if self.notes['run']:
+            started['notes'] = self.notes['run']
+            self._write_notes()
+        self.custody.append('run_started', started)
         clean_old_staging(self.root)
 
     def plan(self, links: Iterable[Dict]) -> None:
@@ -259,8 +284,32 @@ class Run:
         except OSError as exc:
             _log.warning('Could not record the last run: %s', exc)
 
+    # --- notes (brief F27) ---------------------------------------------------
+    def _write_notes(self) -> None:
+        _write_json_atomic(self.dir / NOTES_FILENAME, self.notes)
+
+    def set_link_note(self, url: str, text: Optional[str]) -> None:
+        """A note for one link, at any time: before it runs (it goes into its manifest row) or after."""
+        text = (text or '').strip()
+        with self._lock:
+            if text:
+                self.notes['links'][url] = text
+            else:
+                self.notes['links'].pop(url, None)
+            self._write_notes()
+        self.custody.append('noted', {'url': url}, note=text or None)
+        if self.finished:
+            self.custody.anchor_local()  # the run's head moved after it was anchored
+
+    def _notes_for(self, url: str) -> Optional[Dict]:
+        link = self.notes['links'].get(url)
+        if not (self.notes['run'] or link):
+            return None
+        return {'run': dict(self.notes['run']) or None, 'link': link}
+
     # --- recording -----------------------------------------------------------
     def _record(self, result: JobResult) -> JobResult:
+        result.notes = self._notes_for(result.input_url)
         line = json.dumps(result.to_dict(), ensure_ascii=False) + '\n'
         with self._lock:
             self._jsonl.write(line)
@@ -424,6 +473,7 @@ class Run:
                 row['files'] = ' | '.join(f.path for f in r.files)
                 row['bytes'] = sum(f.bytes for f in r.files) if r.files else ''
                 row['sha256'] = ' | '.join(f.sha256 for f in r.files)
+                row['note'] = self.notes['links'].get(r.input_url, '')
                 if r.status == 'skipped' and not r.error_message:
                     row['error_message'] = r.skip_reason
                 writer.writerow(row)

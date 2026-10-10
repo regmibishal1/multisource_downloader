@@ -143,6 +143,7 @@ def execute_batch(
     prefs: Optional[Dict] = None,
     last_run_pointer: Optional[Path] = None,
     anchor_path: Optional[Path] = None,
+    notes: Optional[Dict] = None,
     stay_awake: bool = False,
     parallel: int = DEFAULT_PARALLEL,
     on_event=None,
@@ -163,7 +164,7 @@ def execute_batch(
         downloader = Downloader(str(out_dir), logger=logger)
     # a dry run only plans; a real run records every link in a manifest
     run = None if dry_run else Run(out_dir, history=history, force=force, last_run_pointer=last_run_pointer,
-                                   anchor_path=anchor_path)
+                                   anchor_path=anchor_path, notes=notes)
     if run:
         run.plan({'url': item.url, 'handler': detect_handler(item.source_hint, item.url), 'hint': item.source_hint}
                  for item in items)
@@ -311,6 +312,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument('--limit', type=int, help='Maximum total items to attempt')
     parser.add_argument('--per-source-limit', type=int, help='Maximum items per source to attempt')
     parser.add_argument('--dry-run', action='store_true', help='Only print actions without downloading')
+    notes = parser.add_argument_group('notes', 'Saved with the run (manifest, notes.json, custody log). Leave out '
+                                               'names if sharing them could put someone at risk.')
+    notes.add_argument('--topic', help='Event or topic')
+    notes.add_argument('--where', help='Where (place)')
+    notes.add_argument('--collected-by', help='Collected by (name or pseudonym)')
+    notes.add_argument('--note', help='Notes')
     parser.add_argument('--quality', choices=['best', '1080', '720', 'audio'], default='best',
                         help='Video quality (default: best available, the original)')
     parser.add_argument('--no-metadata', action='store_true',
@@ -371,6 +378,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         prefs={'quality': args.quality, 'write_metadata': not args.no_metadata},
         last_run_pointer=None if args.dry_run else runs.default_last_run_pointer(),
         anchor_path=None if args.dry_run else custody.default_anchor_path(),
+        notes={'topic': args.topic, 'where': args.where, 'collected_by': args.collected_by, 'notes': args.note},
         stay_awake=not args.no_keep_awake,
         parallel=args.parallel,
     )

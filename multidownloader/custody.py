@@ -33,7 +33,8 @@ from . import __version__
 FILENAME = 'custody.log'
 ANCHORS_FILENAME = 'anchors.log'
 ZERO = 'sha256:' + '0' * 64
-EVENTS = ('run_started', 'captured', 'hashed', 'verified', 'exported', 'copied', 'anchored', 'run_finished')
+EVENTS = ('run_started', 'captured', 'hashed', 'noted', 'verified', 'exported', 'copied', 'anchored',
+          'run_finished')
 APP = f'multisource-downloader {__version__}'
 # during a long run the head is anchored this often, whichever comes first (13.4, A1)
 ANCHOR_EVERY_EVENTS = 100

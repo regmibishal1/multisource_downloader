@@ -37,6 +37,7 @@ More in the window:
 
 - Enter or a double-click opens a file. Right-click, Shift+F10 or the Menu key: Open file, Open folder, Copy link, Copy error, Fix sign-in, Retry, Download again, Remove from list. Right-click a column heading for **Fit columns**.
 - **Stop** (Ctrl+.) asks first, then stops within seconds; an unfinished file is removed. If a run stops early (closed window, crash, power cut), a bar offers **Resume** next time.
+- **Add notes (optional)**, above the queue: event or topic, where, collected by (a name or pseudonym) and notes, saved with the next run; **Add note...** in a link's menu adds a note to one link, before or after it downloads. Notes stay in the run folder. Leave out names if sharing them could put someone at risk. On the command line: `--topic`, `--where`, `--collected-by`, `--note`.
 - **Export report** writes one web page and the run's CSV. Account names of the people in the posts are left out unless you choose to include them.
 - **Options** (Ctrl+,): video quality (the original, up to 1080p or 720p, audio only), what to save next to the media (post details, thumbnails, the uploader's own subtitles), folder layout, the post title in file names, links at once, a short pause between links from one platform, keeping the computer awake, the look (same as Windows, light or dark) and the daily update check.
 - **?**: Help (F1, a page bundled with the app), Keyboard shortcuts, Copy diagnostics for a bug report (sign-ins removed), Open log folder.
