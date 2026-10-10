@@ -1,6 +1,6 @@
 # Exact versions for the project venv (penv). pyproject.toml has the
-# looser ranges used by pip install. Building the portable exe needs
-# PyInstaller too: see portable_manager/requirements.txt.
+# looser ranges used by pip install. Building the Windows app needs
+# PyInstaller too: see scripts/build_exe.py.
 beautifulsoup4==4.13.5
 bottle==0.13.4
 cachetools==5.5.2

@@ -16,6 +16,7 @@ SHORTCUTS = (
     ('F5', 'Retry failed links'),
     ('Ctrl+Shift+O', 'Open the download folder'),
     ('Ctrl+,', 'Options'),
+    ('Ctrl+Shift+V', 'Switch between the simple and the full view'),
     ('F6', 'Move between the Links box, the queue and the buttons'),
     ('Alt + underlined letter', 'Select that button'),
     ('Enter, double-click', 'Open the selected file'),
@@ -53,9 +54,12 @@ def copy_diagnostics(widget) -> str:
     return text
 
 
-def build_menu(parent, *, on_options, on_open_logs, on_status=None) -> tk.Menu:
+def build_menu(parent, *, on_options, on_open_logs, on_status=None, on_toggle_view=None) -> tk.Menu:
     menu = tk.Menu(parent, tearoff=False)
     menu.add_command(label='Options...', accelerator='Ctrl+,', underline=0, command=on_options)
+    if on_toggle_view:
+        menu.add_command(label='Switch simple or full view', accelerator='Ctrl+Shift+V', underline=7,
+                         command=on_toggle_view)
     menu.add_command(label='Keyboard shortcuts', accelerator='F1', underline=0,
                      command=lambda: show_shortcuts(parent.winfo_toplevel()))
     menu.add_separator()

@@ -34,7 +34,7 @@ Change log
 - `gdown` 5.2.1 to 6.4.2: version 6 accepts a cookies file, which Google Drive sign-in needs. It also dropped the `fuzzy=` argument; the app passes it only to versions that still have it, so 5.x keeps working for public links.
 - Added `pywebview` 6.2.1 for "Sign in here", with `bottle` 0.13.4 and `proxy_tools` 0.1.0, and on Windows `pythonnet` 3.2.1 and `clr_loader` 0.3.1. On Windows it uses Microsoft's WebView2 Runtime, which Windows 11 includes.
 - `yt-dlp` 2026.2.4 to 2026.8.19, and added `yt-dlp-ejs` 0.8.0: since 2025.11.12, yt-dlp needs a JavaScript runtime and this component to read YouTube.
-- Removed from `requirements.txt`: PyInstaller and the packages only it needs (`pyinstaller-hooks-contrib`, `altgraph`, `pefile`, `pywin32-ctypes`), which are for building the portable exe and listed in `portable_manager/requirements.txt`; and `greenlet` and `decorator`, which nothing uses. They stay installed in `penv`.
+- Removed from `requirements.txt`: PyInstaller and the packages only it needs (`pyinstaller-hooks-contrib`, `altgraph`, `pefile`, `pywin32-ctypes`), which are for building the Windows app (`scripts/build_exe.py`); and `greenlet` and `decorator`, which nothing uses. They stay installed in `penv`.
 
 External programs
 -----------------

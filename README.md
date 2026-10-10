@@ -17,10 +17,12 @@ Supported sources (install only the extras you need):
 
 `gallery-dl` is licensed GPL-2.0. The app does not include or import it: it runs it as a separate program, so installing it (`pip install ".[images]"`, included in `all`) is up to you.
 
-Portable Standalone Version
----------------------------
+Simple view and the Windows app
+-------------------------------
 
-Looking for a simple, no-installation-required YouTube downloader? Check out the **[Portable Manager](./portable_manager/)** - a standalone `.exe` that anyone can download and run!
+The window has a simple view: one box for a link, Save to, Download, and a one-line result with **Open folder**. Start it with `--simple`, or switch any time from the **?** menu (Ctrl+Shift+V); "switch to full view" brings back the queue, sign-ins and options. The app remembers the view you used last.
+
+The Windows app (`scripts/build_exe.py`, which needs `pip install pyinstaller`) is this same window. It opens in the simple view the first time, so it replaces the old portable YouTube app and downloads from every supported platform. If you used the portable app with a YouTube cookies file, add it once in **Sign-ins**, YouTube, "Import a cookies file"; the old copy is in `%LOCALAPPDATA%\multisource-downloader\portable\cookies.txt`.
 
 Quick start
 -----------
