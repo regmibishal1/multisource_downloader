@@ -26,7 +26,7 @@ from urllib.parse import quote
 from .. import logs
 from .theme import COLORS, fonts
 
-ISSUES_URL = 'https://github.com/regmibishal1/multisource_downloader/issues/new'
+ISSUES_URL = 'https://github.com/regmibishal1/multisource-downloader/issues/new'
 _log = logging.getLogger('multidownloader.crash')
 
 

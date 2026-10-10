@@ -8,12 +8,12 @@ There is a window (with a simple view for one link at a time) and a command line
 Install
 -------
 
-**Windows app.** Download `MultisourceDownloader-<version>-windows.zip` from the [Releases page](https://github.com/regmibishal1/multisource_downloader/releases), check it against the SHA-256 listed there, unzip it, and run `MultisourceDownloader.exe`. It opens in the simple view the first time. It is not code-signed, so Windows may warn the first time: More info, Run anyway. What changed in each version is in [CHANGELOG.md](CHANGELOG.md). To build it yourself, see [For developers](#for-developers).
+**Windows app.** Download `MultisourceDownloader-<version>-windows.zip` from the [Releases page](https://github.com/regmibishal1/multisource-downloader/releases), check it against the SHA-256 listed there, unzip it, and run `MultisourceDownloader.exe`. It opens in the simple view the first time. It is not code-signed, so Windows may warn the first time: More info, Run anyway. What changed in each version is in [CHANGELOG.md](CHANGELOG.md). To build it yourself, see [For developers](#for-developers).
 
 **With Python 3.10 or newer** (Windows, macOS, Linux):
 
 ```powershell
-python -m pip install "multisource-downloader[all] @ git+https://github.com/regmibishal1/multisource_downloader"
+python -m pip install "multisource-downloader[all] @ git+https://github.com/regmibishal1/multisource-downloader"
 multisource-downloader
 ```
 
@@ -125,7 +125,7 @@ When a link is not saved, the app says why in plain words and what to do; the li
 | ffmpeg / Deno is not installed. | `winget install Gyan.FFmpeg`, `winget install DenoLand.Deno`. |
 | Could not connect. Check your internet connection. | Check the connection, then **Retry failed**. |
 | Could not save the file: the drive is full. | Free up space or choose another folder. |
-| Something went wrong. Details are in the log. | **?**, **Copy diagnostics** (or `python -m multidownloader.logs`) and paste it into a [problem report](https://github.com/regmibishal1/multisource_downloader/issues). |
+| Something went wrong. Details are in the log. | **?**, **Copy diagnostics** (or `python -m multidownloader.logs`) and paste it into a [problem report](https://github.com/regmibishal1/multisource-downloader/issues). |
 
 Accessibility
 -------------
@@ -170,7 +170,7 @@ Windows app: `python -m pip install pyinstaller`, then `python scripts/build_exe
 loot_report_scraper: its `run_downloader.py` calls `multidownloader.batch` with the latest `grouped_by_source.json`. Point it at this project:
 
 ```powershell
-$env:MULTIDOWNLOADER_PYTHON = "C:\path\to\multisource_downloader\penv\Scripts\python.exe"
-$env:MULTIDOWNLOADER_ROOT = "C:\path\to\multisource_downloader"
+$env:MULTIDOWNLOADER_PYTHON = "C:\path\to\multisource-downloader\penv\Scripts\python.exe"
+$env:MULTIDOWNLOADER_ROOT = "C:\path\to\multisource-downloader"
 .\penv\Scripts\python.exe run_downloader.py --limit 20
 ```
