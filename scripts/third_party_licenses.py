@@ -24,7 +24,7 @@ except ImportError:  # pragma: no cover  (pip vendors the same module)
 
 ROOT = Path(__file__).resolve().parents[1]
 # what the Windows app bundles: the core and the instagram, drive and webview extras, not images
-BUNDLED = ('yt-dlp[default]', 'instaloader', 'gdown', 'PyDrive2', 'pywebview')
+BUNDLED = ('yt-dlp[default]', 'instaloader', 'gdown', 'google-auth', 'google-auth-oauthlib', 'pywebview')
 NOT_BUNDLED = {'gallery-dl'}
 # build tools and installers are never part of the app
 BUILD_ONLY = {'pip', 'setuptools', 'wheel', 'pyinstaller', 'pyinstaller-hooks-contrib', 'altgraph', 'pefile',

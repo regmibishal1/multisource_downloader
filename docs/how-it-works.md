@@ -20,7 +20,9 @@ and cannot prove, so that someone who collected material with it can explain the
      repair or remux the file after download, so its bytes are what the platform sent; **Also keep
      the separate video and audio streams** saves those too.
    - **Instaloader** (Instagram) saves the photos and videos of the post as served.
-   - **gdown** and **PyDrive2** (Google Drive) save the file exactly as stored in Drive.
+   - **gdown** (Google Drive) saves the file exactly as stored in Drive. With your own Google Cloud
+     connection, the app reads the file through Google's Drive API with Google's own sign-in
+     libraries (google-auth), and checks it against the MD5 checksum Drive gives for it.
    - **gallery-dl** (Bluesky, and photo posts on other platforms) saves the images as served. It runs
      as a separate program.
    Next to the media each program writes the post's details (`.info.json`, `.json` or

@@ -145,7 +145,7 @@ def diagnostics(log_lines: int = 200) -> str:
         f'Python: {sys.version.split()[0]} ({sys.executable})',
         f'Tk: {tk_version}',
     ]
-    rows += [f'{name}: {version(name)}' for name in ('yt-dlp', 'yt-dlp-ejs', 'instaloader', 'gdown', 'PyDrive2',
+    rows += [f'{name}: {version(name)}' for name in ('yt-dlp', 'yt-dlp-ejs', 'instaloader', 'gdown', 'google-auth-oauthlib',
                                                       'pywebview')]
     rows += [f'ffmpeg: {"found" if shutil.which("ffmpeg") else "not found"}',
              f'Deno: {"found" if shutil.which("deno") else "not found"}',

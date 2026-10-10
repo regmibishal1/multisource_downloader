@@ -20,7 +20,8 @@ dependencies = [
 instagram = ["instaloader>=4.11"]
 # Drive sign-in with Google cookies needs gdown 6 (cookies_file); public
 # links work with 5 too.
-drive = ["gdown>=5", "PyDrive2>=1.20"]
+# Drive with your own Google Cloud OAuth client uses Google's own libraries.
+drive = ["gdown>=5", "google-auth>=2.15", "google-auth-oauthlib>=1.0"]
 # "Sign in here": the platform's own sign-in page in a small app window.
 webview = ["pywebview>=5"]
 # Image posts (photo-only X posts, carousels, Bluesky). gallery-dl is GPL-2.0;
