@@ -40,8 +40,8 @@ multidownloader-signin = "multidownloader.signin_cli:main"
 multisource-downloader = "multisource_downloader_ui:main"
 
 [project.urls]
-Source = "https://github.com/regmibishal1/multisource_downloader"
-Issues = "https://github.com/regmibishal1/multisource_downloader/issues"
+Source = "https://github.com/regmibishal1/multisource-downloader"
+Issues = "https://github.com/regmibishal1/multisource-downloader/issues"
 
 [tool.hatch.version]
 path = "multidownloader/__init__.py"
