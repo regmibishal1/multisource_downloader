@@ -20,6 +20,12 @@ Updating a dependency
 6. Add a line to the log below.
 7. Before pushing: `python scripts/check_public.py --commits origin/master..HEAD`.
 
+Dependabot (`.github/dependabot.yml`) opens a monthly pull request when a newer version exists for
+`pyproject.toml` or the CI workflow's actions. It does not touch `requirements.txt` or
+`requirements-lock.txt`, so treat its pull request as a reminder: follow the steps above for that
+package in `penv`, push the result to the Dependabot branch (or a new one), and close the Dependabot
+pull request if it is replaced. Security alerts and security updates are on separately.
+
 To go back, reinstall from the saved freeze: `.\penv\Scripts\python.exe -m pip install -r penv-before.txt`.
 
 Change log
