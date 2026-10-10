@@ -23,7 +23,9 @@ class BlueskyHandler:
 
     def download(self, url, out_dir, options):
         if gallerydl.available()[0]:
-            files = gallerydl.download(url, out_dir, platform_key='bluesky', cancel_event=options.get('cancel_event'))
+            files = gallerydl.download(url, out_dir, platform_key='bluesky', cancel_event=options.get('cancel_event'),
+                                       layout=options.get('layout', 'account'),
+                                       write_metadata=options.get('write_metadata', True))
             return {'backend': gallerydl.NAME, 'files': files}
         self.logger.info('gallery-dl is not installed; trying yt-dlp for %s', url)
         return self._ytdlp.download(url, out_dir, options)

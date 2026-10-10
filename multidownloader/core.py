@@ -87,7 +87,9 @@ class Downloader:
         files = gallerydl.download(url, out_dir, platform_key=platform.key,
                                    cookie_file=signins.cookie_file_for_download(source_name),
                                    user_agent=signins.user_agent_for(source_name),
-                                   cancel_event=options.get('cancel_event'))
+                                   cancel_event=options.get('cancel_event'),
+                                   layout=options.get('layout', 'account'),
+                                   write_metadata=options.get('write_metadata', True))
         if not files:
             raise exc
         return {'backend': gallerydl.NAME, 'files': files}

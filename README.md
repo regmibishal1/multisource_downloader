@@ -60,6 +60,8 @@ UI notes
 - The **Queue** lists every link with its status (✓ Saved, ✕ Failed, … Waiting, ↓ 45 %, = Already saved, ■ Stopped, ⊘ Skipped) and, for a failed link, why in plain words. **Show** filters it; **Retry failed (n)** (F5) tries the failed ones again. Enter or a double-click opens the file. Right-click, Shift+F10 or the Menu key gives Open file, Open folder, Copy link, Copy error, Fix sign-in, Retry, Download again and Remove from list.
 - **Export report** writes a single HTML page (it opens anywhere) and the run's CSV. Account names of the people in the posts are left out unless you choose to include them. **Show details** opens the log, with sign-ins removed.
 - The download folder and the window's size are remembered (`settings.json` in your user data folder). Ctrl+Enter starts, Ctrl+L goes to the Links box.
+- **Options** (Ctrl+,) sets video quality (best available, up to 1080p or 720p, audio only), what to save next to the media (post details, thumbnails, the uploader's own subtitles), how folders are laid out (platform and account, platform only, or one folder), whether to add the post title to file names, how many links download at once, the short pause between links from one platform, keeping the computer awake, and the look (same as Windows, light or dark). Changes apply to the next download; the look applies the next time the app opens. Windows High Contrast is always followed, and the window stays sharp at 150 % and 200 % display scaling.
+- The **?** menu lists the keyboard shortcuts (F1), copies diagnostics for a bug report (versions and the last log lines, sign-ins removed) and opens the log folder. F6 moves between the Links box, the queue and the buttons; Alt plus a button's underlined letter selects it.
 - Google Drive links try public access first and use your Drive sign-in only when Drive refuses the link.
 - Public posts download without signing in. When a download needs a sign-in, the app offers to set one up after the run, and **Sign-ins** (top right) shows every platform's status.
 
@@ -105,6 +107,7 @@ Options:
 - Unsupported hosts are reported in the summary so you can triage manually.
 - Exit codes: `0` everything attempted succeeded, `1` some downloads failed, `2` nothing was attempted because every link was from an unsupported site.
 - `--force` downloads links again even if an earlier run saved them.
+- `--quality best|1080|720|audio` picks the video quality (default: the original); `--no-metadata` leaves out the post details file.
 - `--resume` finishes the last run that stopped before it was done (closed window, crash, power cut), in the same download folder. Starting a new run tells you when there is one to resume.
 - Up to 3 links download at once (`--parallel N`, 1 to 6), but never two from the same platform, with a short random pause between links from one platform (8 to 15 seconds on Instagram). When a platform limits requests, the app pauses that platform for 10 minutes, tries the link once more, and keeps going with the others.
 - Ctrl+C stops after the current files and records the rest as not started (press it again to quit at once); `--resume` finishes them later. In the window, **Stop** asks first, then stops within seconds; a file that was not finished is removed.

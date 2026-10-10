@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from . import detect, errors, logs, platforms, runs, session_store, signins
+from . import detect, errors, logs, platforms, runs, session_store, settings, signins
 from .awake import keep_awake
 from .core import Downloader
 from .history import History
@@ -122,6 +122,7 @@ def execute_batch(
     history: Optional[History] = None,
     force: bool = False,
     include_title: bool = False,
+    prefs: Optional[Dict] = None,
     last_run_pointer: Optional[Path] = None,
     stay_awake: bool = False,
     parallel: int = DEFAULT_PARALLEL,
@@ -148,11 +149,12 @@ def execute_batch(
                  for item in items)
     with keep_awake(stay_awake and run is not None):
         return _execute(items, run, downloader, logger, limit=limit, per_source_limit=per_source_limit,
-                        dry_run=dry_run, include_title=include_title, parallel=parallel, on_event=on_event)
+                        dry_run=dry_run, include_title=include_title, parallel=parallel, on_event=on_event,
+                        prefs=prefs)
 
 
 def _execute(items, run, downloader, logger, *, limit, per_source_limit, dry_run, include_title, parallel,
-             on_event):
+             on_event, prefs=None):
     counts: Dict[str, int] = {}
     attempted = 0
     completed: List[Tuple[str, str]] = []
@@ -197,12 +199,7 @@ def _execute(items, run, downloader, logger, *, limit, per_source_limit, dry_run
             completed.append((handler, item.url))
             continue
 
-        opts = {'include_title': True} if include_title else {}
-        if handler == 'Instagram':
-            opts['auth'] = 'auto'
-        elif handler != 'Google Drive':
-            # yt-dlp based handlers reuse session cookies when available
-            opts['use_session'] = True
+        opts = settings.download_options(dict(prefs or {}, include_title=include_title), handler)
 
         jobs.append(Job(item.url, handler, opts, item.source_hint))
 
@@ -293,6 +290,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument('--limit', type=int, help='Maximum total items to attempt')
     parser.add_argument('--per-source-limit', type=int, help='Maximum items per source to attempt')
     parser.add_argument('--dry-run', action='store_true', help='Only print actions without downloading')
+    parser.add_argument('--quality', choices=['best', '1080', '720', 'audio'], default='best',
+                        help='Video quality (default: best available, the original)')
+    parser.add_argument('--no-metadata', action='store_true',
+                        help='Do not save post details (.info.json) next to the media')
     parser.add_argument('--include-title', action='store_true',
                         help='Add the post title (first 60 characters) to file names')
     parser.add_argument('--resume', action='store_true',
@@ -346,6 +347,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         history=None if args.dry_run else History(),
         force=args.force,
         include_title=args.include_title,
+        prefs={'quality': args.quality, 'write_metadata': not args.no_metadata},
         last_run_pointer=None if args.dry_run else runs.default_last_run_pointer(),
         stay_awake=not args.no_keep_awake,
         parallel=args.parallel,

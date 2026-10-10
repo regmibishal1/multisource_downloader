@@ -160,10 +160,11 @@ class InstagramHandler:
         escaped_dir = str(out_dir).replace('{', '{{').replace('}', '}}')
         previous_pattern = loader.dirname_pattern
         previous_filename = loader.filename_pattern
-        loader.dirname_pattern = os.path.join(escaped_dir, 'instagram', '{profile}')
+        folders = {'account': ('instagram', '{profile}'), 'platform': ('instagram',), 'flat': ()}
+        loader.dirname_pattern = os.path.join(escaped_dir, *folders.get(options.get('layout'), folders['account']))
         loader.filename_pattern = '{date_utc:%Y-%m-%d}_{shortcode}'
         # keep the post's JSON (caption, owner, time) readable next to the media
-        loader.save_metadata = True
+        loader.save_metadata = options.get('write_metadata', True)
         loader.compress_json = False
         try:
             attempts = 2
