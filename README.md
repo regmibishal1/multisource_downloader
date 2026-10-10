@@ -8,7 +8,7 @@ There is a window (with a simple view for one link at a time) and a command line
 Install
 -------
 
-**Windows app.** Download the zip from the [Releases page](https://github.com/regmibishal1/multisource_downloader/releases) when one is published, unzip it, and run `MultisourceDownloader.exe`. It opens in the simple view the first time. To build it yourself, see [For developers](#for-developers).
+**Windows app.** Download `MultisourceDownloader-<version>-windows.zip` from the [Releases page](https://github.com/regmibishal1/multisource_downloader/releases), check it against the SHA-256 listed there, unzip it, and run `MultisourceDownloader.exe`. It opens in the simple view the first time. It is not code-signed, so Windows may warn the first time: More info, Run anyway. What changed in each version is in [CHANGELOG.md](CHANGELOG.md). To build it yourself, see [For developers](#for-developers).
 
 **With Python 3.10 or newer** (Windows, macOS, Linux):
 
