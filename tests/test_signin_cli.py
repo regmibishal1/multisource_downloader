@@ -19,6 +19,11 @@ class SigninCliTests(unittest.TestCase):
         patcher = mock.patch.object(session_store, 'SESSION_ROOT', self.tmp / '.sessions')
         patcher.start()
         self.addCleanup(patcher.stop)
+        # main() moves old sign-ins and opens the user's log file: never from tests
+        for target in ('multidownloader.session_store.migrate_legacy_sessions', 'multidownloader.logs.setup'):
+            patcher = mock.patch(target)
+            patcher.start()
+            self.addCleanup(patcher.stop)
         self.cookies = self.tmp / 'cookies.txt'
         self.cookies.write_text(COOKIES, encoding='utf-8')
 

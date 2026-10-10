@@ -16,7 +16,9 @@ import difflib
 import sys
 from typing import Optional, Sequence
 
-from . import signins
+import logging
+
+from . import logs, session_store, signins
 from .platforms import BY_KEY, PLATFORMS
 from .signins import SignInError
 
@@ -147,6 +149,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    logs.setup(console=True, console_level=logging.WARNING)
+    session_store.migrate_legacy_sessions()
     if not getattr(args, 'func', None):
         parser.print_help(sys.stderr)
         return 2

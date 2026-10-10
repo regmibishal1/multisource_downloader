@@ -8,10 +8,8 @@ thread running the downloads writes to it.
 from __future__ import annotations
 
 import json
-import os
 import re
 import sqlite3
-import sys
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,6 +17,7 @@ from typing import List, Optional
 from urllib.parse import parse_qs, urlsplit
 
 from . import detect
+from .appdirs import data_dir as user_data_dir
 
 HISTORY_FILENAME = 'history.sqlite'
 
@@ -44,21 +43,6 @@ _POST_PATTERNS = {
     'gdrive': re.compile(r'(?:/d/|/folders/|[?&]id=)([\w-]+)'),
     'facebook': re.compile(r'/(?:videos|reel|posts)/(\d+)'),
 }
-
-
-def user_data_dir() -> Path:
-    """The per-user folder for app data (history, logs).
-
-    Windows: %LOCALAPPDATA%\\multisource-downloader. macOS: ~/Library/Application
-    Support/multisource-downloader. Others: $XDG_DATA_HOME or ~/.local/share.
-    """
-    if sys.platform == 'win32' and os.environ.get('LOCALAPPDATA'):
-        base = Path(os.environ['LOCALAPPDATA'])
-    elif sys.platform == 'darwin':
-        base = Path.home() / 'Library' / 'Application Support'
-    else:
-        base = Path(os.environ.get('XDG_DATA_HOME') or Path.home() / '.local' / 'share')
-    return base / 'multisource-downloader'
 
 
 def post_id(url: str) -> Optional[str]:
