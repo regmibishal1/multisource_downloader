@@ -99,7 +99,7 @@ class DriveDownloadTests(TempSessionRoot):
                 mock.patch.object(handler, '_download_folder', return_value=True) as folder_dl:
             self.assertTrue(handler.download('https://drive.google.com/open?id=X1', str(self.tmp), {}))
         file_dl.assert_called_once()
-        folder_dl.assert_called_once_with('X1', str(self.tmp))
+        folder_dl.assert_called_once_with('X1', str(self.tmp), None)
 
     def test_gdown_returning_none_is_a_failure(self):
         fake_gdown = mock.Mock()

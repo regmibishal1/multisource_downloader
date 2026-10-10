@@ -115,6 +115,89 @@ class SignInWindowTests(unittest.TestCase):
         self.assertFalse(signins.cookie_path(x).exists())
         sheet.destroy()
 
+    def test_sign_in_here_card(self):
+        from multidownloader.gui.signin_sheet import SignInSheet
+        with mock.patch.object(signins, 'webview_available', return_value=(True, '')):
+            sheet = SignInSheet(self.root, BY_KEY['instagram'])
+            self.pump(sheet)
+            self.assertIn('Sign in here', texts(sheet))
+            # Firefox has nothing, so the in-app window is preselected
+            self.assertEqual('webview', sheet.method_var.get())
+            sheet.destroy()
+            sheet = SignInSheet(self.root, BY_KEY['youtube'])
+            self.assertNotIn('Sign in here', texts(sheet))  # Google blocks embedded sign-in
+            sheet.destroy()
+        with mock.patch.object(signins, 'webview_available', return_value=(False, signins.WEBVIEW2_MESSAGE)):
+            sheet = SignInSheet(self.root, BY_KEY['x'])
+            shown = texts(sheet)
+            self.assertIn(signins.WEBVIEW2_MESSAGE, shown)
+            self.assertIn('Get it', shown)
+            self.assertIn('disabled', sheet.webview_radio.state())
+            sheet.destroy()
+
+    def test_companion_shows_the_page_and_saves_the_result(self):
+        import json
+
+        from multidownloader.gui.signin_sheet import SignInSheet
+        ig = BY_KEY['instagram']
+        with mock.patch.object(signins, 'webview_available', return_value=(True, '')):
+            sheet = SignInSheet(self.root, ig)
+        sheet._show_companion()
+        sheet._show_page('https://www.instagram.com/accounts/login/')
+        self.assertEqual('Page: www.instagram.com, secure (https)', sheet.page_var.get())
+        sheet._show_page('http://phish.example/login')
+        self.assertEqual('! Unexpected page: phish.example', sheet.page_var.get())
+
+        out = signins.folder(ig) / '.signin-test.json'
+        out.write_text(json.dumps({'cookies': [{'name': 'sessionid', 'value': 'S', 'domain': '.instagram.com'}],
+                                   'user_agent': 'UA'}), encoding='utf-8')
+        sheet._webview_out = str(out)
+        sheet._webview_done = True
+        sheet.ack_var.set(True)
+        sheet._webview_finished()
+        self.wait_for(sheet, lambda: '✓ Signed in to Instagram.' in texts(sheet))
+        self.assertFalse(out.exists())  # the hand-off file is deleted
+        self.assertEqual('UA', signins.read_meta(ig)['user_agent'])
+        sheet.destroy()
+
+    def test_closed_window_returns_to_the_cards(self):
+        from multidownloader.gui.signin_sheet import SignInSheet
+        with mock.patch.object(signins, 'webview_available', return_value=(True, '')):
+            sheet = SignInSheet(self.root, BY_KEY['x'])
+        sheet._show_companion()
+        sheet._webview_done = False
+        sheet._webview_finished()
+        self.assertTrue(sheet.cards.winfo_ismapped() or sheet.cards.grid_info())
+        self.assertIn('closed or timed out', sheet.message_var.get())
+        sheet.destroy()
+
+    def test_cancel_is_not_an_error(self):
+        from multidownloader.gui.signin_sheet import SignInSheet
+        with mock.patch.object(signins, 'webview_available', return_value=(True, '')):
+            sheet = SignInSheet(self.root, BY_KEY['x'])
+        sheet._show_companion()
+        proc = mock.Mock()
+        proc.poll.return_value = None
+        sheet._webview_proc = proc
+        sheet._webview_done = False
+        sheet._webview_cancelled = False
+        sheet._cancel_webview()
+        proc.terminate.assert_called_once()
+        sheet._webview_finished()  # what the reader thread triggers after exit
+        self.assertEqual('', sheet.message_var.get())
+        sheet.destroy()
+
+    def test_drive_sheet_offers_the_cloud_project(self):
+        from multidownloader.gui.signin_sheet import SignInSheet
+        sheet = SignInSheet(self.root, BY_KEY['gdrive'])
+        shown = texts(sheet)
+        self.assertIn('Connect with your own Google Cloud project', shown)
+        self.assertNotIn('Sign in here', shown)
+        sheet.method_var.set('oauth')
+        sheet._update_continue()
+        self.assertNotIn('disabled', sheet.continue_btn.state())  # Drive has no terms notice
+        sheet.destroy()
+
     def test_password_option_only_for_instagram(self):
         from multidownloader.gui.signin_sheet import SignInSheet
         for key, expected in (('instagram', True), ('x', False), ('facebook', False)):

@@ -6,13 +6,16 @@ rotates accounts or gets around a platform's blocks (brief 0.11).
 """
 from __future__ import annotations
 
+import contextlib
 import os
 import queue
 import subprocess
+import tempfile
 import sys
 import threading
 import tkinter as tk
 import webbrowser
+from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Callable, Optional
 
@@ -101,6 +104,15 @@ class SignInSheet(tk.Toplevel):
         self.file_text: Optional[str] = None
         self.file_name: Optional[str] = None
         self.found_profiles = []
+        self._webview_proc = None
+        self._webview_out = None
+        self._password_shown = False
+        if platform.web_signin_url:
+            self.webview_ok, self.webview_reason = signins.webview_available()
+        else:
+            self.webview_ok, self.webview_reason = False, ''
+        if platform.key == 'gdrive' and not reason:
+            reason = 'Public Drive links need no sign-in. Sign in only for files shared with your Google account.'
         f = fonts(self)
 
         self.title(f'Sign in to {platform.name}')
@@ -133,12 +145,19 @@ class SignInSheet(tk.Toplevel):
                 row=3, column=1, sticky='w', pady=(8, 0))
             row += 1
 
-        self.method_var = tk.StringVar(value='browser')
+        # preselect the first method that works; Firefox wins once it is
+        # found to hold a sign-in (the user's password manager already worked)
+        self.method_var = tk.StringVar(value='webview' if self.webview_ok else 'browser')
         self.cards = ttk.Frame(self.body)
         self.cards.grid(row=row, column=0, sticky='ew')
         self.cards.columnconfigure(0, weight=1)
+        self._cards_row = row
+        if platform.web_signin_url:
+            self._build_webview_card()
         self._build_browser_card()
         self._build_file_card()
+        if platform.key == 'gdrive':
+            self._build_oauth_card(3)
         row += 1
 
         if platform.key == 'instagram':
@@ -168,12 +187,15 @@ class SignInSheet(tk.Toplevel):
         frame = ttk.Frame(self.cards, padding=(8, 8), relief='solid', borderwidth=1)
         frame.grid(row=row, column=0, sticky='ew', pady=(0, 8))
         frame.columnconfigure(0, weight=1)
-        ttk.Radiobutton(frame, text=title, value=value, variable=self.method_var,
-                        command=self._update_continue).grid(row=0, column=0, sticky='w')
+        radio = ttk.Radiobutton(frame, text=title, value=value, variable=self.method_var,
+                                command=self._update_continue)
+        radio.grid(row=0, column=0, sticky='w')
+        if value == 'webview':
+            self.webview_radio = radio
         return frame
 
     def _build_browser_card(self):
-        card = self._card(0, 'browser', 'Use my Firefox sign-in')
+        card = self._card(1, 'browser', 'Use my Firefox sign-in')
         self.browser_line = tk.StringVar(value='Looking for a sign-in in Firefox...')
         ttk.Label(card, textvariable=self.browser_line, font=fonts(self)['caption'],
                   foreground=COLORS['text-2'], wraplength=WRAP - 30, justify='left').grid(
@@ -197,7 +219,7 @@ class SignInSheet(tk.Toplevel):
             row=4, column=0, sticky='w', padx=(22, 0))
 
     def _build_file_card(self):
-        card = self._card(1, 'file', 'Import a cookies file')
+        card = self._card(2, 'file', 'Import a cookies file')
         text = 'For advanced users. Paste or choose a cookies.txt file. ' + EXTENSION_HELP
         if self.platform.key == 'youtube':
             text += ' ' + YOUTUBE_STEPS
@@ -212,8 +234,195 @@ class SignInSheet(tk.Toplevel):
 
     def _show_password_card(self):
         self.more_link.grid_remove()
-        card = self._card(2, 'password', 'Username and password')
+        self._password_shown = True
+        card = self._card(3, 'password', 'Username and password')
         _caption(card, INSTAGRAM_PASSWORD_NOTE, wraplength=WRAP - 30).grid(row=1, column=0, sticky='w', padx=(22, 0))
+
+    # --- Sign in here (in-app window) --------------------------------------
+    def _build_webview_card(self):
+        card = self._card(0, 'webview', 'Sign in here')
+        name = self.platform.name
+        if self.webview_ok:
+            text = (f'Opens {name} in a small window. No extension or file needed. '
+                    'Your password manager may not fill this window. Paste works.')
+            _caption(card, text, wraplength=WRAP - 30).grid(row=1, column=0, sticky='w', padx=(22, 0))
+            return
+        self.webview_radio.state(['disabled'])
+        _caption(card, self.webview_reason, tone='warning', wraplength=WRAP - 30).grid(
+            row=1, column=0, sticky='w', padx=(22, 0))
+        if self.webview_reason == signins.WEBVIEW2_MESSAGE:
+            link_label(card, 'Get it', lambda: webbrowser.open(signins.WEBVIEW2_URL)).grid(
+                row=2, column=0, sticky='w', padx=(22, 0))
+
+    def _start_webview(self):
+        """Open the sign-in window in its own process and follow its progress."""
+        import json as _json
+
+        self._webview_error = None
+        self._webview_cancelled = False
+        fd, out = tempfile.mkstemp(prefix='.signin-', suffix='.json', dir=signins.folder(self.platform))
+        os.close(fd)  # mkstemp makes it readable only by this user
+        self._webview_out = out
+        parent = self.master.winfo_toplevel()
+        x = parent.winfo_rootx() + max(0, (parent.winfo_width() - 480) // 2)
+        y = parent.winfo_rooty() + 40
+        cmd = [sys.executable, '-m', 'multidownloader.gui.signin_window', '--platform', self.platform.key,
+               '--out', out, '--x', str(x), '--y', str(y)]
+        root = Path(__file__).resolve().parents[2]  # so -m finds the package when run from source
+        flags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+        try:
+            self._webview_proc = subprocess.Popen(cmd, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                                  text=True, creationflags=flags)
+        except OSError as exc:
+            self._webview_cleanup()
+            self._show_error(f'Could not open the sign-in window: {exc}')
+            return
+        events = queue.Queue()
+
+        def read():
+            for line in self._webview_proc.stdout:
+                try:
+                    events.put(_json.loads(line))
+                except ValueError:
+                    continue
+            events.put({'event': 'exit', 'code': self._webview_proc.wait()})
+
+        threading.Thread(target=read, daemon=True).start()
+        self._show_companion()
+        self._webview_done = False
+        self._poll_webview(events)
+
+    def _show_companion(self):
+        """Replace the method cards with the live status of the sign-in window."""
+        self.cards.grid_remove()
+        self.footer.grid_remove()
+        if getattr(self, 'more_link', None) is not None:
+            self.more_link.grid_remove()
+        self.message_var.set('')
+        f = fonts(self)
+        self.companion = ttk.Frame(self.body)
+        self.companion.grid(row=self._cards_row, column=0, sticky='ew')
+        ttk.Label(self.companion, text=f'Signing in to {self.platform.name}', font=f['bold']).grid(
+            row=0, column=0, sticky='w')
+        _caption(self.companion, 'Sign in as usual in the window that opened, including any security code. '
+                                 'It closes by itself when you are signed in.').grid(row=1, column=0, sticky='w',
+                                                                                     pady=(4, 8))
+        self.page_var = tk.StringVar(value='Page: opening...')
+        self.page_label = ttk.Label(self.companion, textvariable=self.page_var, foreground=COLORS['text-2'])
+        self.page_label.grid(row=2, column=0, sticky='w')
+        buttons = ttk.Frame(self.companion)
+        buttons.grid(row=3, column=0, sticky='w', pady=(12, 0))
+        ttk.Button(buttons, text='Cancel', command=self._cancel_webview).pack(side=tk.LEFT, padx=(0, 12))
+        link_label(buttons, 'Use another way', self._back_to_cards).pack(side=tk.LEFT)
+
+    def _show_page(self, url):
+        # the window has no address bar, so show where it is
+        from urllib.parse import urlsplit
+
+        parts = urlsplit(url or '')
+        host = parts.hostname or ''
+        if parts.scheme == 'https' and self.platform.expected_signin_host(host):
+            self.page_var.set(f'Page: {host}, secure (https)')
+            self.page_label.configure(foreground=COLORS['success'])
+        else:
+            self.page_var.set(f'! Unexpected page: {host or url}')
+            self.page_label.configure(foreground=COLORS['warning'])
+
+    def _poll_webview(self, events):
+        if not self.winfo_exists():
+            return
+        try:
+            while True:
+                event = events.get_nowait()
+                kind = event.get('event')
+                if kind == 'url':
+                    self._show_page(event.get('url'))
+                elif kind == 'done':
+                    self._webview_done = True
+                elif kind == 'error':
+                    self._webview_error = event.get('message')
+                elif kind == 'exit':
+                    self._webview_finished()
+                    return
+        except queue.Empty:
+            pass
+        self.after(200, self._poll_webview, events)
+
+    def _webview_finished(self):
+        import json as _json
+
+        out = getattr(self, '_webview_out', None)
+        self._webview_proc = None
+        if not self._webview_done or not out:
+            self._webview_cleanup()
+            self._back_to_cards()
+            if getattr(self, '_webview_cancelled', False):
+                return  # the user chose Cancel or another way: not an error
+            reason = getattr(self, '_webview_error', None)
+            self._show_error(f'The sign-in window could not open: {reason}' if reason
+                             else 'The sign-in window was closed or timed out. Select Continue to try again.')
+            return
+        try:
+            with open(out, encoding='utf-8') as fp:
+                data = _json.load(fp)
+        except (OSError, ValueError):
+            data = {}
+        finally:
+            self._webview_cleanup()
+        terms = self._terms_version()
+        self.page_var.set('Saving your sign-in...')
+        self.worker.run(
+            lambda: signins.save_webview_signin(self.platform, data.get('cookies') or [],
+                                                user_agent=data.get('user_agent'), terms_version=terms),
+            self._success, self._webview_save_failed)
+
+    def _webview_save_failed(self, message):
+        self._back_to_cards()
+        self._show_error(message)
+
+    def _webview_cleanup(self):
+        out = getattr(self, '_webview_out', None)
+        self._webview_out = None
+        if out:
+            with contextlib.suppress(OSError):
+                os.unlink(out)
+
+    def _cancel_webview(self):
+        self._back_to_cards()
+
+    def _back_to_cards(self):
+        proc = getattr(self, '_webview_proc', None)
+        if proc and proc.poll() is None:
+            self._webview_cancelled = True
+            proc.terminate()  # the reader thread then reports exit
+            return
+        if getattr(self, 'companion', None) is not None and self.companion.winfo_exists():
+            self.companion.destroy()
+        self.cards.grid()
+        self.footer.grid()
+        if getattr(self, 'more_link', None) is not None and not getattr(self, '_password_shown', False):
+            self.more_link.grid()
+        self._update_continue()
+
+    def destroy(self):
+        proc = getattr(self, '_webview_proc', None)
+        if proc and proc.poll() is None:
+            proc.terminate()
+        self._webview_cleanup()
+        super().destroy()
+
+    # --- Google Drive: the user's own OAuth client ----------------------------
+    def _build_oauth_card(self, row):
+        card = self._card(row, 'oauth', 'Connect with your own Google Cloud project')
+        _caption(card, 'Advanced. For files only your Google account can open, when cookies are not an option. '
+                       'Takes about 10 minutes the first time.', wraplength=WRAP - 30).grid(
+            row=1, column=0, sticky='w', padx=(22, 0))
+
+    def _open_drive_wizard(self):
+        wizard = DriveConnectWindow(self)
+        self.wait_window(wizard)
+        if wizard.connected:
+            self._success(None)
 
     # --- detection ---------------------------------------------------------
     def _browser_key(self):
@@ -258,7 +467,7 @@ class SignInSheet(tk.Toplevel):
                 self.browser_line.set(f'No {self.platform.name} sign-in found in Firefox. '
                                       f'Sign in to {self.platform.name} in Firefox, then select Check.')
             if self.method_var.get() == 'browser':
-                self.method_var.set('file')
+                self.method_var.set('webview' if self.webview_ok else 'file')
         else:
             first = found[0]
             who = f', account {first.account_id[:4]}...' if first.account_id else ''
@@ -340,7 +549,9 @@ class SignInSheet(tk.Toplevel):
             return bool(self.found_profiles)
         if method == 'file':
             return self.file_text is not None
-        return method == 'password'
+        if method == 'webview':
+            return self.webview_ok
+        return method in ('password', 'oauth')
 
     def _update_continue(self):
         if hasattr(self, 'continue_btn'):
@@ -365,6 +576,12 @@ class SignInSheet(tk.Toplevel):
             result = ask_instagram_password_signin(self, InstagramHandler(), terms)
             if result:
                 self._success(result)
+            return
+        if method == 'webview':
+            self._start_webview()
+            return
+        if method == 'oauth':
+            self._open_drive_wizard()
             return
         self.continue_btn.state(['disabled'])
         self.message_var.set('Saving your sign-in...')
@@ -391,10 +608,16 @@ class SignInSheet(tk.Toplevel):
         for child in self.body.winfo_children():
             child.destroy()
         f = fonts(self)
-        acct = f' (account {result.account_id[:4]}...)' if result.account_id else ''
-        ttk.Label(self.body, text=f'✓ Signed in to {self.platform.name}{acct}.', foreground=COLORS['success'],
+        if result is None:  # Google Drive OAuth connection
+            heading = '✓ Connected to Google Drive.'
+            lines = ['Google signs you out every 7 days while your project is in Testing status. '
+                     'To avoid that, publish the app in your Google Cloud project.']
+        else:
+            acct = f' (account {result.account_id[:4]}...)' if result.account_id else ''
+            heading = f'✓ Signed in to {self.platform.name}{acct}.'
+            lines = [result.message()]
+        ttk.Label(self.body, text=heading, foreground=COLORS['success'],
                   font=f['section']).grid(row=0, column=0, sticky='w')
-        lines = [result.message()]
         if self.method_var.get() == 'file' and self.file_name:
             lines.append('You can delete the original file now. It contains sign-ins for every site.')
         _caption(self.body, ' '.join(lines)).grid(row=1, column=0, sticky='w', pady=(8, 0))
@@ -413,6 +636,119 @@ class SignInSheet(tk.Toplevel):
         callback = self.on_retry
         self.destroy()
         callback()
+
+
+DRIVE_STEPS = (
+    ('Create a Google Cloud project.', 'https://console.cloud.google.com/projectcreate'),
+    ('Enable the Google Drive API for it.', 'https://console.cloud.google.com/apis/library/drive.googleapis.com'),
+    ('Set up the consent screen: choose External, and fill in the app name and your email.',
+     'https://console.cloud.google.com/auth/branding'),
+    ('Add your own Google account as a test user.', 'https://console.cloud.google.com/auth/audience'),
+    ('Create an OAuth client of type "Desktop app" and download its JSON file.',
+     'https://console.cloud.google.com/auth/clients'),
+    ('Choose the downloaded file below, then select Connect. Your browser opens for Google to ask for consent.',
+     None),
+)
+DRIVE_TESTING_WARNING = ('Google signs you out every 7 days while your project is in Testing status. '
+                         'To avoid that, publish the app in your Google Cloud project.')
+
+
+class DriveConnectWindow(tk.Toplevel):
+    """Six steps to connect Google Drive with the user's own OAuth client (brief 0.4, M5)."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.connected = False
+        self.client_file: Optional[str] = None
+        self.worker = _Worker(self)
+        f = fonts(self)
+        self.title('Connect Google Drive')
+        self.transient(parent)
+        self.minsize(560, 420)
+        body = ttk.Frame(self, padding=24)
+        body.pack(fill=tk.BOTH, expand=True)
+        body.columnconfigure(1, weight=1)
+        ttk.Label(body, text='Connect with your own Google Cloud project', font=f['section']).grid(
+            row=0, column=0, columnspan=2, sticky='w')
+        _caption(body, 'Google does not allow signing in inside other apps, so this uses your own free Google '
+                       'Cloud project and your normal browser.').grid(row=1, column=0, columnspan=2, sticky='w',
+                                                                    pady=(4, 12))
+        row = 2
+        for number, (text, url) in enumerate(DRIVE_STEPS, 1):
+            ttk.Label(body, text=f'{number}.', font=f['bold']).grid(row=row, column=0, sticky='nw', padx=(0, 8))
+            step = ttk.Frame(body)
+            step.grid(row=row, column=1, sticky='w', pady=(0, 6))
+            ttk.Label(step, text=text, wraplength=WRAP - 40, justify='left').pack(anchor='w')
+            if url:
+                link_label(step, 'Open in browser', lambda u=url: webbrowser.open(u)).pack(anchor='w')
+            row += 1
+
+        choose = ttk.Frame(body)
+        choose.grid(row=row, column=1, sticky='w', pady=(4, 0))
+        ttk.Button(choose, text='Choose file...', command=self._choose).pack(side=tk.LEFT, padx=(0, 8))
+        self.file_var = tk.StringVar(value='No file chosen.')
+        ttk.Label(choose, textvariable=self.file_var, font=f['caption']).pack(side=tk.LEFT)
+        row += 1
+
+        ttk.Label(body, text='! ' + DRIVE_TESTING_WARNING, foreground=COLORS['warning'], wraplength=WRAP,
+                  justify='left').grid(row=row, column=0, columnspan=2, sticky='w', pady=(12, 0))
+        row += 1
+        self.message_var = tk.StringVar()
+        self.message = ttk.Label(body, textvariable=self.message_var, wraplength=WRAP, justify='left')
+        self.message.grid(row=row, column=0, columnspan=2, sticky='w', pady=(8, 0))
+        row += 1
+        footer = ttk.Frame(body)
+        footer.grid(row=row, column=0, columnspan=2, sticky='e', pady=(16, 0))
+        ttk.Button(footer, text='Cancel', command=self.destroy).pack(side=tk.LEFT, padx=(0, 8))
+        self.connect_btn = ttk.Button(footer, text='Connect', command=self._connect)
+        self.connect_btn.pack(side=tk.LEFT)
+        self.connect_btn.state(['disabled'])
+        self.bind('<Escape>', lambda _e: self.destroy())
+        self.grab_set()
+        self.focus_set()
+
+    def _error(self, text):
+        self.message.configure(foreground=COLORS['error'])
+        self.message_var.set('✕ ' + text)
+
+    def _choose(self):
+        from ..sources.gdrive import validate_client_secrets
+
+        path = filedialog.askopenfilename(parent=self, title='Choose the OAuth client JSON file',
+                                          filetypes=[('JSON files', '*.json'), ('All files', '*.*')])
+        if not path:
+            return
+        try:
+            with open(path, encoding='utf-8', errors='replace') as fp:
+                validate_client_secrets(fp.read())
+        except (OSError, SignInError) as exc:
+            self.client_file = None
+            self.connect_btn.state(['disabled'])
+            self._error(str(exc))
+            return
+        self.client_file = path
+        self.file_var.set(os.path.basename(path))
+        self.message_var.set('')
+        self.connect_btn.state(['!disabled'])
+
+    def _connect(self):
+        from ..sources.gdrive import GoogleDriveHandler
+
+        if not self.client_file:
+            return
+        self.connect_btn.state(['disabled'])
+        self.message.configure(foreground=COLORS['text-2'])
+        self.message_var.set('Waiting for Google in your browser...')
+        path = self.client_file
+        self.worker.run(lambda: GoogleDriveHandler().connect_oauth(path), self._done, self._failed)
+
+    def _done(self, _result):
+        self.connected = True
+        self.destroy()
+
+    def _failed(self, message):
+        self.connect_btn.state(['!disabled'])
+        self._error(message)
 
 
 class SignInsWindow(tk.Toplevel):
@@ -523,4 +859,4 @@ class SignInsWindow(tk.Toplevel):
             self._changed()
 
 
-__all__ = ['SignInSheet', 'SignInsWindow', 'open_folder']
+__all__ = ['DriveConnectWindow', 'SignInSheet', 'SignInsWindow', 'open_folder']

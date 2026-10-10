@@ -176,7 +176,8 @@ class InstagramHandler:
         stamp = path.stat().st_mtime
         if self._signin_loader and self._signin_loader[0] == stamp:
             return self._signin_loader[1]
-        loader = Instaloader()
+        user_agent = signins.user_agent_for('Instagram')
+        loader = Instaloader(user_agent=user_agent) if user_agent else Instaloader()
         jar = loader.context._session.cookies
         for c in signins.read_cookies(BY_KEY['instagram']):
             jar.set(c.name, c.value, domain=c.domain, path=c.path)

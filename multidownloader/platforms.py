@@ -40,6 +40,16 @@ class Platform:
     # "optional": public posts work without one.
     signin_need: str = 'optional'
     terms: Optional[Terms] = None
+    # "Sign in here": the page the in-app window opens. None where the site
+    # blocks sign-in inside embedded windows (Google: YouTube and Drive).
+    web_signin_url: Optional[str] = None
+    # Hosts the sign-in window may show without an "Unexpected page" warning,
+    # besides cookie_domains (for example Threads signs in through Instagram).
+    web_signin_hosts: Tuple[str, ...] = ()
+
+    def expected_signin_host(self, host: str) -> bool:
+        host = (host or '').lower()
+        return any(host == d or host.endswith('.' + d) for d in self.cookie_domains + self.web_signin_hosts)
 
 
 _LOSE_ACCOUNT = 'If you sign in, use an account you can afford to lose. This does not make automated use allowed.'
@@ -61,6 +71,7 @@ PLATFORMS: Tuple[Platform, ...] = (
              markers=(('auth_token',),),
              account_cookie='twid',
              signin_need='often',
+             web_signin_url='https://x.com/i/flow/login',
              terms=Terms('2026-10-09', 'https://x.com/en/tos',
                          "X's terms do not allow scraping without written permission. "
                          'Using your account here can get it restricted.',
@@ -72,6 +83,8 @@ PLATFORMS: Tuple[Platform, ...] = (
              markers=(('sessionid',),),
              account_cookie='ds_user_id',
              signin_need='often',
+             web_signin_url='https://www.instagram.com/accounts/login/',
+             web_signin_hosts=('facebook.com',),
              terms=Terms('2025-01-01', 'https://help.instagram.com/581066165581870',
                          "Instagram's terms do not allow automated collection, including while signed in. "
                          'Using your account here can get it restricted or banned.',
@@ -81,6 +94,8 @@ PLATFORMS: Tuple[Platform, ...] = (
              ('threads',),
              cookie_domains=('threads.net', 'threads.com'),
              markers=(('sessionid',),),
+             web_signin_url='https://www.threads.net/login',
+             web_signin_hosts=('instagram.com',),
              terms=Terms('2026-01-21', 'https://help.instagram.com/769983657850450',
                          "Instagram's terms do not allow automated collection, including while signed in. "
                          'Using your account here can get it restricted or banned.',
@@ -90,6 +105,7 @@ PLATFORMS: Tuple[Platform, ...] = (
              ('tiktok', 'douyin'),
              cookie_domains=('tiktok.com',),
              markers=(('sessionid',),),
+             web_signin_url='https://www.tiktok.com/login',
              terms=Terms('2026-07', 'https://www.tiktok.com/legal/page/us/terms-of-service/en',
                          "TikTok's terms allow downloading only through TikTok's own features or with written "
                          'approval. Using your account here can get it restricted.',
@@ -101,6 +117,7 @@ PLATFORMS: Tuple[Platform, ...] = (
              markers=(('c_user',), ('xs',)),
              account_cookie='c_user',
              signin_need='often',
+             web_signin_url='https://www.facebook.com/login/',
              terms=Terms('2025-01-01', 'https://www.facebook.com/terms.php',
                          "Facebook's terms do not allow automated data collection without permission, and allow "
                          'only one account per person, in your real name. Using your account here can get it '
@@ -111,6 +128,7 @@ PLATFORMS: Tuple[Platform, ...] = (
              ('reddit',),
              cookie_domains=('reddit.com',),
              markers=(('reddit_session', 'token_v2'),),
+             web_signin_url='https://www.reddit.com/login/',
              terms=Terms('2026-07-01', 'https://redditinc.com/policies/user-agreement',
                          "Reddit's terms do not allow scraping without written consent. "
                          'Using your account here can get it restricted.',
