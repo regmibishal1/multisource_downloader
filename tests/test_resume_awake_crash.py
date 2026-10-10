@@ -90,6 +90,7 @@ class ResumeTests(unittest.TestCase):
         manifest_file = self.tmp / 'unused.json'
         original = runs.last_unfinished_run
         with mock.patch.object(batch.runs, 'default_last_run_pointer', return_value=self.pointer), \
+                mock.patch.object(batch.custody, 'default_anchor_path', return_value=self.tmp / 'anchors.log'), \
                 mock.patch.object(batch.runs, 'last_unfinished_run', side_effect=lambda: original(self.pointer)), \
                 mock.patch.object(batch, 'History', return_value=history), \
                 mock.patch.object(batch, 'Downloader', return_value=FakeDownloader({'p.jpg': b'2'})), \
