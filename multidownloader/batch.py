@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from . import detect, errors, logs, platforms, runs, session_store, settings, signins
+from . import custody, detect, errors, logs, platforms, runs, session_store, settings, signins
 from .awake import keep_awake
 from .core import Downloader
 from .history import History
@@ -142,6 +142,7 @@ def execute_batch(
     include_title: bool = False,
     prefs: Optional[Dict] = None,
     last_run_pointer: Optional[Path] = None,
+    anchor_path: Optional[Path] = None,
     stay_awake: bool = False,
     parallel: int = DEFAULT_PARALLEL,
     on_event=None,
@@ -161,7 +162,8 @@ def execute_batch(
     if downloader is None:
         downloader = Downloader(str(out_dir), logger=logger)
     # a dry run only plans; a real run records every link in a manifest
-    run = None if dry_run else Run(out_dir, history=history, force=force, last_run_pointer=last_run_pointer)
+    run = None if dry_run else Run(out_dir, history=history, force=force, last_run_pointer=last_run_pointer,
+                                   anchor_path=anchor_path)
     if run:
         run.plan({'url': item.url, 'handler': detect_handler(item.source_hint, item.url), 'hint': item.source_hint}
                  for item in items)
@@ -368,6 +370,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         include_title=args.include_title,
         prefs={'quality': args.quality, 'write_metadata': not args.no_metadata},
         last_run_pointer=None if args.dry_run else runs.default_last_run_pointer(),
+        anchor_path=None if args.dry_run else custody.default_anchor_path(),
         stay_awake=not args.no_keep_awake,
         parallel=args.parallel,
     )

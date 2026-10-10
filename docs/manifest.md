@@ -10,6 +10,10 @@ download folder. The run id is the start time in UTC plus four random characters
 | `manifest.csv` | The same rows with the columns below, for spreadsheets. |
 | `SHA256SUMS.txt` | The SHA-256 of every saved file, relative to the download folder. `sha256sum -c _runs/<run id>/SHA256SUMS.txt`, run from the download folder, checks that nothing changed. |
 | `run.json` | The list of links the run was asked to do. With the manifest it tells which links were not done, so an unfinished run can be resumed. |
+| `custody.log` | What happened to the files, in order, one event per line, each line chained to the one before by its SHA-256. See [how-it-works.md](how-it-works.md#the-custody-log). |
+
+The head of each custody log is also recorded in `anchors.log` in the per-user data folder
+(`%LOCALAPPDATA%\multisource-downloader` on Windows), outside the download folder.
 
 ## Fields in `manifest.jsonl`
 
@@ -41,6 +45,19 @@ error_message, started_at, finished_at, app_version, backend_version`. The file 
 byte order mark, so Excel opens it correctly. `files` and `sha256` list several values separated by
 ` | ` for posts with more than one file; `bytes` is their total. For a skipped link, `error_message`
 holds the skip reason.
+
+## Fields in `custody.log`
+
+| Field | Meaning |
+|---|---|
+| `seq` | Line number, from 1. |
+| `at` | UTC time of the event. |
+| `event` | `run_started`, `captured` (a download finished), `hashed` (a file's SHA-256), `verified`, `exported`, `copied`, `anchored` (the head was recorded elsewhere), `run_finished`. |
+| `run_id`, `app` | The run and the app version. |
+| `detail` | Event details, for example `path` and `sha256` for `hashed`, or `method`, `seq` and `head` for `anchored`. |
+| `note` | A note from the user, if any. |
+| `prev` | `sha256:` and the SHA-256 of the previous line as written, without its line ending (`sha256:000...0` on line 1). |
+| `hash` | `sha256:` and the SHA-256 of this line written with `"hash":""`. |
 
 ## Privacy
 

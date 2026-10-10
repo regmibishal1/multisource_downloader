@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
 from . import __version__, detect, errors, signins
+from .custody import FILENAME as CUSTODY_FILENAME, CustodyLog
 
 _log = logging.getLogger(__name__)
 
@@ -212,9 +213,10 @@ class Run:
     """Downloads for one batch of links, with staging and a manifest."""
 
     def __init__(self, out_root, *, run_id: Optional[str] = None, history=None, force: bool = False,
-                 last_run_pointer: Optional[Path] = None):
+                 last_run_pointer: Optional[Path] = None, anchor_path: Optional[Path] = None):
         """last_run_pointer: where plan() records this run for resuming; only the app's own entry
-        points pass one (runs.default_last_run_pointer()), so tests never touch user data."""
+        points pass one (runs.default_last_run_pointer()), so tests never touch user data.
+        anchor_path: anchors.log for the custody log's head (custody.default_anchor_path()), same rule."""
         self.last_run_pointer = last_run_pointer
         """history: a History to skip links saved before (None: no skipping). force: download them anyway."""
         self.history = history
@@ -232,6 +234,9 @@ class Run:
         self._jsonl = open(self.dir / 'manifest.jsonl', 'a', encoding='utf-8', newline='\n')
         self.finished = False
         self._planned = False
+        # what happened to the files, in order, with a hash chain (brief F29)
+        self.custody = CustodyLog(self.dir / CUSTODY_FILENAME, self.run_id, anchor_path=anchor_path)
+        self.custody.append('run_started', {'app': f'multisource-downloader {__version__}'})
         clean_old_staging(self.root)
 
     def plan(self, links: Iterable[Dict]) -> None:
@@ -325,6 +330,8 @@ class Run:
                 # another backend did the work (gallery-dl for image posts)
                 result.backend = outcome['backend']
                 result.backend_version = backend_version(result.backend)
+            self.custody.append('captured', {'url': url, 'backend': result.backend,
+                                             'backend_version': result.backend_version})
             files = self._collect(stage)
             if not files:
                 result.status = 'failed'
@@ -391,6 +398,7 @@ class Run:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 os.replace(src, target)  # same drive: atomic, and never over an existing file
             records.append(FileRecord(_rel(target, self.root), size, digest))
+            self.custody.append('hashed', {'path': _rel(target, self.root), 'sha256': digest, 'bytes': size})
         return records
 
     # --- finishing -----------------------------------------------------------
@@ -428,6 +436,11 @@ class Run:
                     lines.append(f'{f.sha256}  {f.path}\n')
         with open(self.dir / 'SHA256SUMS.txt', 'w', encoding='utf-8', newline='\n') as fp:
             fp.writelines(lines)
+        try:
+            self.custody.append('run_finished', {'counts': self.counts(), 'files': len(lines)})
+            self.custody.anchor_local()  # the head goes outside the run folder (13.4, A1)
+        except OSError as exc:
+            _log.warning('Could not finish the custody log: %s', exc)
         return self.counts()
 
     def counts(self) -> Dict[str, int]:

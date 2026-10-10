@@ -29,7 +29,7 @@ class SelfTestTests(unittest.TestCase):
         if 'yt-dlp-ejs is missing' in text or 'No module named' in text.split('download')[0]:
             self.skipTest('yt-dlp is not fully installed here')
         self.assertEqual(0, code, text)
-        self.assertIn('ok    download: 1 file, manifest and SHA256SUMS written', text)
+        self.assertIn('ok    download: 1 file, manifest, SHA256SUMS and custody log written and verified', text)
         self.assertIn('ok    sign-in: saved, read back and removed', text)
         self.assertTrue(text.endswith('self-test: ok\n'))
         self.assertEqual(env_before, {name: os.environ.get(name) for name in selftest._ENV})

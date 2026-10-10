@@ -18,7 +18,7 @@ from tkinter import filedialog, messagebox, ttk
 from typing import Optional
 
 from multidownloader import appdirs, detect, errors as errors_mod, logs, runs, session_store, settings, signins
-from multidownloader import updates
+from multidownloader import custody, updates
 from multidownloader.batch import links_from_file
 from multidownloader.awake import keep_awake
 from multidownloader.core import Downloader
@@ -651,7 +651,8 @@ class DownloaderUI:
         try:
             # links saved in earlier runs are recorded as already saved, not
             # downloaded again; the run is recorded so it can be resumed if it stops
-            run = Run(out_dir, history=History(), force=force, last_run_pointer=runs.default_last_run_pointer())
+            run = Run(out_dir, history=History(), force=force, last_run_pointer=runs.default_last_run_pointer(),
+                      anchor_path=custody.default_anchor_path())
         except OSError as exc:
             messagebox.showerror('Cannot save here', f'Could not write to {out_dir}. Choose another folder.\n\n{exc}',
                                  parent=self.root)
