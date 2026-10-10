@@ -16,6 +16,7 @@ from multidownloader.core import Downloader
 from multidownloader.gui.signin_sheet import SignInSheet, SignInsWindow
 from multidownloader.gui.theme import COLORS
 from multidownloader.platforms import BY_HANDLER
+from multidownloader.history import History
 from multidownloader.runs import Run
 
 SOURCE_CHOICES = [
@@ -134,7 +135,8 @@ class DownloaderUI:
 
         downloader = Downloader(out_dir, logger=logging.getLogger('multidownloader'))
         try:
-            run = Run(out_dir)
+            # links saved in earlier runs are recorded as already saved, not downloaded again
+            run = Run(out_dir, history=History())
         except OSError as exc:
             messagebox.showerror('Cannot save here', f'Could not write to {out_dir}. Choose another folder.\n\n{exc}',
                                  parent=self.root)
@@ -166,6 +168,8 @@ class DownloaderUI:
             result = run.download(downloader, source, url, opts)
             if result.status == 'saved':
                 logging.info('Saved %s: %s file(s)', url, len(result.files))
+            elif result.status == 'already_saved':
+                logging.info('Already saved %s on %s', url, result.previous['saved_at'][:10])
             else:
                 errors.append((url, result.error_detail or result.error_message or ''))
                 logging.error('Core download error for %s: %s', url, result.error_message)
@@ -179,6 +183,11 @@ class DownloaderUI:
         self.refresh_signin_summary()
         saved = len(urls) - len(errors)
         report = f' Report: {run.dir}' if run else ''
+        if run:
+            already = run.counts().get('already_saved', 0)
+            saved -= already
+            if already:
+                report = f' {already} already saved.' + report
         if not errors:
             self.status_var.set(f'Done. {saved} saved.{report}')
             self.root.title('Multi-Source Downloader')
