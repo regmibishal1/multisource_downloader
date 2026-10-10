@@ -203,6 +203,22 @@ class YtDlpCookieTests(TempSessionRoot):
         self.assertEqual(cookie_path, handler._resolve_cookie_path({'use_session': True}))
         self.assertIsNone(handler._resolve_cookie_path({'use_session': False}))
 
+    def test_without_ffmpeg_streams_are_saved_separately(self):
+        from multidownloader.sources import yt_dlp_base
+        handler = YtDlpHandler('YouTube', outtmpl='youtube/%(title)s [%(id)s].%(ext)s')
+        with mock.patch.object(yt_dlp_base.shutil, 'which', return_value=None):
+            opts = handler._build_opts(str(self.tmp), {}, None)
+        self.assertEqual('best/bestvideo*,bestaudio', opts['format'])
+        self.assertTrue(opts['outtmpl'].endswith('[%(id)s].f%(format_id)s.%(ext)s'))
+        with mock.patch.object(yt_dlp_base.shutil, 'which', return_value='/usr/bin/ffmpeg'):
+            opts = handler._build_opts(str(self.tmp), {}, None)
+        self.assertNotIn('format', opts)  # yt-dlp's default: best video + best audio, merged
+        self.assertTrue(opts['outtmpl'].endswith('[%(id)s].%(ext)s'))
+        # an explicit format from the caller always wins
+        with mock.patch.object(yt_dlp_base.shutil, 'which', return_value=None):
+            opts = handler._build_opts(str(self.tmp), {'ytdlp_opts': {'format': 'worst'}}, None)
+        self.assertEqual('worst', opts['format'])
+
     def test_retry_settings(self):
         opts = YtDlpHandler('Twitter')._build_opts(str(self.tmp), {}, None)
         self.assertEqual(10, opts['retries'])

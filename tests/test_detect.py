@@ -211,7 +211,7 @@ class BatchDedupeTests(unittest.TestCase):
         class Fake:
             calls = []
 
-            def download(self, source, url, options):
+            def download(self, source, url, options, out_dir=None):
                 self.calls.append(url)
 
         items = [

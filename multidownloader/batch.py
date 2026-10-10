@@ -11,6 +11,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from . import detect, platforms, signins
 from .core import Downloader
+from .runs import Run
 
 SUPPORTED_SOURCES = {p.handler for p in platforms.PLATFORMS}
 
@@ -106,6 +107,8 @@ def execute_batch(
 
     if downloader is None:
         downloader = Downloader(str(out_dir), logger=logger)
+    # a dry run only plans; a real run records every link in a manifest
+    run = None if dry_run else Run(out_dir)
 
     counts: Dict[str, int] = {}
     attempted = 0
@@ -114,26 +117,31 @@ def execute_batch(
     errors: List[Tuple[str, str, str]] = []
     seen = set()
 
+    def skip(item, reason, handler=None):
+        skipped.append((item.source_hint, item.url, reason))
+        if run:
+            run.skip(item.url, reason, handler=handler, hint=item.source_hint)
+
     for item in items:
         # the same post shared in different link formats is downloaded once
         key = detect.normalize_url(item.url)
         if key in seen:
-            skipped.append((item.source_hint, item.url, 'duplicate'))
+            skip(item, 'duplicate')
             continue
         seen.add(key)
 
         handler = detect_handler(item.source_hint, item.url)
         if not handler or handler not in SUPPORTED_SOURCES:
-            skipped.append((item.source_hint, item.url, 'unsupported'))
+            skip(item, 'unsupported')
             continue
 
         if limit is not None and attempted >= limit:
-            skipped.append((item.source_hint, item.url, 'global-limit'))
+            skip(item, 'global-limit', handler)
             continue
 
         used = counts.get(handler, 0)
         if per_source_limit is not None and used >= per_source_limit:
-            skipped.append((item.source_hint, item.url, 'per-source-limit'))
+            skip(item, 'per-source-limit', handler)
             continue
 
         counts[handler] = used + 1
@@ -151,18 +159,23 @@ def execute_batch(
             # yt-dlp based handlers reuse session cookies when available
             opts['use_session'] = True
 
-        try:
-            downloader.download(handler, item.url, opts)
+        result = run.download(downloader, handler, item.url, opts, hint=item.source_hint)
+        if result.status == 'saved':
             completed.append((handler, item.url))
-        except Exception as exc:  # pragma: no cover - delegates to handlers
-            logger.error('Download failed for %s (%s): %s', item.url, handler, exc)
-            errors.append((handler, item.url, str(exc)))
+            logger.info('Saved %s: %s file(s)', item.url, len(result.files))
+        else:
+            logger.error('Download failed for %s (%s): %s', item.url, handler, result.error_message)
+            errors.append((handler, item.url, result.error_message or ''))
 
+    if run:
+        run.finish()
     return {
         'attempted': attempted,
         'completed': completed,
         'skipped': skipped,
         'errors': errors,
+        'run_dir': str(run.dir) if run else None,
+        'results': run.results if run else [],
     }
 
 
@@ -202,6 +215,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
 
     logger.info('Attempted: %s, completed: %s, skipped: %s, errors: %s', result['attempted'], len(result['completed']), len(result['skipped']), len(result['errors']))
+    if result['run_dir']:
+        logger.info('Report: %s', Path(result['run_dir']) / 'manifest.csv')
 
     if result['errors']:
         logger.error('Some downloads failed. See log for details.')

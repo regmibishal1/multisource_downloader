@@ -33,7 +33,8 @@ class Downloader:
         """Return the list of supported source names."""
         return list(self.handlers.keys())
 
-    def download(self, source_name, url, options=None):
+    def download(self, source_name, url, options=None, out_dir=None):
+        """Download url with the named handler into out_dir (default: the Downloader's folder)."""
         if source_name not in self.handlers:
             raise ValueError(f'Unknown source: {source_name}')
         handler = self.handlers[source_name]
@@ -43,7 +44,7 @@ class Downloader:
             self._refreshed.add(source_name)
             signins.refresh_from_browser(platforms.BY_HANDLER[source_name])
         try:
-            result = handler.download(url, self.out_dir, options or {})
+            result = handler.download(url, out_dir or self.out_dir, options or {})
         except Exception as exc:
             signins.record_result(source_name, False, str(exc))
             raise
