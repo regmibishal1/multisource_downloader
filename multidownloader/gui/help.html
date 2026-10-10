@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Multisource Downloader help</title>
+<style>
+:root { --bg: #F3F3F3; --surface: #FFFFFF; --text: #1B1B1B; --text-2: #5D5D5D; --accent: #005FB8; --divider: #E0E0E0; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #202020; --surface: #2B2B2B; --text: #FFFFFF; --text-2: #C5C5C5; --accent: #60CDFF; --divider: #3A3A3A; }
+}
+body { font: 16px/1.55 "Segoe UI", system-ui, sans-serif; color: var(--text); background: var(--bg); margin: 0; }
+main { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+section { background: var(--surface); border: 1px solid var(--divider); border-radius: 8px; padding: 8px 24px 16px; margin: 16px 0; }
+h1 { font-size: 26px; margin: 8px 0; }
+h2 { font-size: 20px; margin: 16px 0 8px; }
+p.summary { color: var(--text-2); }
+a { color: var(--accent); }
+a:focus, a:hover { outline: 2px solid var(--accent); outline-offset: 2px; }
+kbd { font: 14px Consolas, monospace; border: 1px solid var(--text-2); border-radius: 4px; padding: 0 4px; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid var(--divider); }
+nav ul { columns: 2; padding-left: 20px; }
+</style>
+</head>
+<body>
+<main>
+<h1>Multisource Downloader help</h1>
+<p class="summary">Paste links, choose where to save, select Download. Every file is listed with its SHA-256 in the run folder. This page works without the internet.</p>
+<nav aria-label="Contents"><ul>
+<li><a href="#start">Getting started</a></li>
+<li><a href="#simple">Simple and full view</a></li>
+<li><a href="#queue">The queue</a></li>
+<li><a href="#signins">Sign-ins</a></li>
+<li><a href="#options">Options</a></li>
+<li><a href="#export">Reports and the run folder</a></li>
+<li><a href="#updates">Updates</a></li>
+<li><a href="#keyboard">Keyboard</a></li>
+<li><a href="#problems">When a link fails</a></li>
+<li><a href="#privacy">Privacy and safety</a></li>
+<li><a href="#accessibility">Accessibility</a></li>
+</ul></nav>
+
+<section id="start">
+<h2>Getting started</h2>
+<p class="summary">Three steps: paste, check Save to, Download.</p>
+<ol>
+<li>Paste links into the Links box. Any text that contains links works: a chat export, an e-mail, notes. <b>Import file...</b> reads a .txt, .csv, .json or web page.</li>
+<li>The line under the box says what was found, for example "12 links found: Instagram 5, X (Twitter) 4. 2 duplicates removed."</li>
+<li>Check <b>Save to</b>, then select <b>Download</b>. Links you saved before are marked "Already saved" and not downloaded again.</li>
+</ol>
+<p>Supported: YouTube, X (Twitter), Instagram, Threads, TikTok, Facebook, Reddit, Google Drive and Bluesky.</p>
+</section>
+
+<section id="simple">
+<h2>Simple and full view</h2>
+<p class="summary">The simple view is one box and one button; the full view adds the queue, sign-ins and options.</p>
+<p>Switch from the <b>?</b> menu or with <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd>. In the simple view, "switch to full view" is under the result line. The app opens in the view you used last.</p>
+</section>
+
+<section id="queue">
+<h2>The queue</h2>
+<p class="summary">One row per link, with its status in words and a symbol, never colour alone.</p>
+<table>
+<tr><th>Status</th><th>Meaning</th></tr>
+<tr><td>… Waiting</td><td>Not started yet. Links from one platform wait their turn.</td></tr>
+<tr><td>↓ 45 %</td><td>Downloading.</td></tr>
+<tr><td>✓ Saved</td><td>Saved and listed in the run folder.</td></tr>
+<tr><td>= Already saved</td><td>Saved in an earlier run; not downloaded again.</td></tr>
+<tr><td>✕ Failed</td><td>Not saved. The Result column says why and what to do.</td></tr>
+<tr><td>■ Stopped</td><td>You selected Stop before it started.</td></tr>
+<tr><td>⊘ Skipped</td><td>The site is not supported yet.</td></tr>
+</table>
+<p>Enter or a double-click opens the file. The context menu (right-click, <kbd>Shift</kbd>+<kbd>F10</kbd> or the Menu key) has Open file, Open folder, Copy link, Copy error, Fix sign-in, Retry, Download again and Remove from list. Right-click a column heading and choose <b>Fit columns</b> to reset the column widths. <b>Retry failed</b> (<kbd>F5</kbd>) tries every failed link again.</p>
+</section>
+
+<section id="signins">
+<h2>Sign-ins</h2>
+<p class="summary">Public posts need no sign-in. When one is needed, the app offers to set it up after the run.</p>
+<p>Most platforms' terms do not allow automated downloading. Each platform shows its terms notice once, and you confirm you will use this only where you have a right to. A sign-in stays on this computer, readable only by your Windows account; <b>Remove</b> deletes it.</p>
+<ul>
+<li><b>Sign in here</b> opens the platform's own sign-in page in a small window. Your password manager may not fill this window. Paste works.</li>
+<li><b>Use my Firefox sign-in</b> copies the sign-in from Firefox, where your password manager works.</li>
+<li><b>Import a cookies file</b> takes a cookies.txt exported from your browser. Only that platform's cookies are kept.</li>
+</ul>
+<p>The sign-in window closes after 10 minutes. A minute before, the app asks "Still there?" and <b>Keep waiting</b> gives you 10 more minutes.</p>
+</section>
+
+<section id="options">
+<h2>Options</h2>
+<p class="summary"><kbd>Ctrl</kbd>+<kbd>,</kbd> opens Options. Changes apply to the next download.</p>
+<ul>
+<li><b>Video quality</b>: the original, up to 1080p, up to 720p, or audio only. Photos are always the original.</li>
+<li><b>What to save</b>: post details (account, date, caption) next to the media, thumbnails, and the uploader's own subtitles.</li>
+<li><b>Folders and file names</b>: by platform and account, by platform, or all in one folder; optionally the post title in file names.</li>
+<li><b>Speed</b>: how many links at once (never two from the same platform), and a short pause between links from one platform.</li>
+<li><b>Appearance</b>: same as Windows, light or dark, from the next start. Windows High Contrast is always followed.</li>
+</ul>
+</section>
+
+<section id="export">
+<h2>Reports and the run folder</h2>
+<p class="summary">Every run has its own folder with a list of what was saved and each file's fingerprint.</p>
+<p>The run folder (<code>_runs</code> in your download folder) has <code>manifest.jsonl</code> and <code>manifest.csv</code> (one line per link: where it came from, when, which files) and <code>SHA256SUMS.txt</code>. <b>Export report</b> writes one web page and the CSV. Account names of the people in the posts are left out of the report unless you choose to include them.</p>
+</section>
+
+<section id="updates">
+<h2>Updates</h2>
+<p class="summary">Old versions of yt-dlp are the most common reason downloads stop working.</p>
+<p>Once a day the app asks pypi.org for the newest version numbers of yt-dlp and gallery-dl. Nothing about you or your links is sent. A bar appears when an update is needed; <b>How to update</b> shows what to do. Turn it off in Options.</p>
+</section>
+
+<section id="keyboard">
+<h2>Keyboard</h2>
+<p class="summary">Everything works without a mouse.</p>
+<table>
+<tr><th>Keys</th><th>What they do</th></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>L</kbd></td><td>Go to the Links box</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>O</kbd></td><td>Import links from a file</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>Download</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>.</kbd></td><td>Stop</td></tr>
+<tr><td><kbd>F5</kbd></td><td>Retry failed links</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd></td><td>Open the download folder</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>,</kbd></td><td>Options</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd></td><td>Switch between the simple and the full view</td></tr>
+<tr><td><kbd>F6</kbd>, <kbd>Shift</kbd>+<kbd>F6</kbd></td><td>Move between the Links box, the queue and the buttons</td></tr>
+<tr><td><kbd>Alt</kbd> + underlined letter</td><td>Select that button</td></tr>
+<tr><td><kbd>Tab</kbd> in the Links box</td><td>Move to the next control (it does not type a tab)</td></tr>
+<tr><td><kbd>Enter</kbd>, double-click</td><td>Open the selected file</td></tr>
+<tr><td><kbd>Shift</kbd>+<kbd>F10</kbd>, Menu key</td><td>More actions for the selected link</td></tr>
+<tr><td><kbd>Delete</kbd></td><td>Remove the selected links from the list</td></tr>
+<tr><td><kbd>Esc</kbd></td><td>Close a dialog without changing anything</td></tr>
+<tr><td><kbd>F1</kbd></td><td>This help</td></tr>
+</table>
+</section>
+
+<section id="problems">
+<h2>When a link fails</h2>
+<p class="summary">The Result column says what happened in plain words. The most common ones:</p>
+<table>
+<tr><th>Message</th><th>What to do</th></tr>
+<tr><td>This post needs you to be signed in</td><td>Select Fix sign-in, or add one in Sign-ins.</td></tr>
+<tr><td>did not accept your sign-in</td><td>The sign-in expired or was signed out. Sign in again.</td></tr>
+<tr><td>is limiting requests</td><td>Nothing: the app waits and tries again by itself. Fewer links at once helps.</td></tr>
+<tr><td>YouTube is limiting this computer</td><td>Wait an hour or more, then try with one link at once.</td></tr>
+<tr><td>This post was deleted or the link is wrong</td><td>Open the link in your browser to check it.</td></tr>
+<tr><td>This post is private</td><td>Sign in with an account that can see it.</td></tr>
+<tr><td>blocked in your region</td><td>The platform does not show it in your country.</td></tr>
+<tr><td>Could not connect</td><td>Check your internet connection, then Retry.</td></tr>
+<tr><td>Could not save the file</td><td>Choose another folder: the drive is full, read-only or the path is too long.</td></tr>
+<tr><td>is not installed</td><td>A component is missing (ffmpeg, Deno, gallery-dl). See the README.</td></tr>
+<tr><td>needs an update</td><td>Update yt-dlp: see Updates above.</td></tr>
+</table>
+<p>For a bug report, use <b>?</b>, <b>Copy diagnostics</b>: versions and the last log lines, with sign-ins removed.</p>
+</section>
+
+<section id="privacy">
+<h2>Privacy and safety</h2>
+<p class="summary">No telemetry. The app only talks to the platforms you download from and, once a day, pypi.org.</p>
+<p>Manifests can contain the account names of people in the posts. Keep the download folder private, and turn on drive encryption (BitLocker on Windows, FileVault on macOS). Respect each platform's terms and your local law; this tool is meant for preserving public evidence and your own content.</p>
+</section>
+
+<section id="accessibility">
+<h2>Accessibility</h2>
+<p class="summary">Keyboard, contrast and scaling work today; screen readers do not fully read the window yet.</p>
+<p>Every control works with the keyboard, focus is always visible, and text meets WCAG 2.2 AA contrast in the light, dark and High Contrast looks. The window scales at 150 % and 200 %. The window toolkit (Tk 8.6) does not announce status changes to screen readers, so the final result also goes into the window title. The command line (<code>multidownloader-batch</code>) works fully with screen readers.</p>
+</section>
+</main>
+</body>
+</html>

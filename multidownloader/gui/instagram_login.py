@@ -7,6 +7,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from ..signins import SignInError
+from .help import help_button
 from .theme import COLORS, fonts
 
 
@@ -55,6 +56,7 @@ class InstagramPasswordDialog(tk.Toplevel):
         self.submit_btn.pack(side=tk.LEFT)
 
         self.bind('<Return>', lambda _e: self.submit())
+        help_button(self, 'signins')
         self.bind('<Escape>', lambda _e: self.cancel())
         self.protocol('WM_DELETE_WINDOW', self.cancel)
         self.grab_set()

@@ -11,6 +11,7 @@ from typing import Callable, Dict, Optional
 
 from .. import settings
 from ..runner import MAX_PARALLEL
+from .help import help_button
 from .theme import COLORS, fonts, px
 
 QUALITY_LABELS = (
@@ -69,6 +70,7 @@ class OptionsWindow(tk.Toplevel):
         body = ttk.Frame(self, padding=px(24))
         body.pack(fill=tk.BOTH, expand=True)
         body.columnconfigure(0, weight=1)
+        help_button(self, 'options')
         row = 0
 
         def section(text, top=24):

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from typing import Dict, List
@@ -60,8 +61,18 @@ def watch(window, platform, out_path: str, timeout: float, state: dict) -> None:
     """Poll the window until the sign-in cookie appears or time runs out."""
     deadline = time.time() + timeout
     last_url = None
+    more_path = out_path + '.more'  # the app touches this file when the user selects Keep waiting
+    seen_more = None
     while time.time() < deadline:
         time.sleep(POLL_SECONDS)
+        try:
+            stamp = os.path.getmtime(more_path)
+        except OSError:
+            stamp = None
+        if stamp is not None and stamp != seen_more:
+            seen_more = stamp
+            deadline = time.time() + timeout
+            emit('extended')
         try:
             url = window.get_current_url()
             if url and url != last_url:

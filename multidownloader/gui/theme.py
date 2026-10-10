@@ -174,7 +174,7 @@ def _style(root: tk.Misc) -> None:
     style.configure('.', background=c['bg'], foreground=c['text'], fieldbackground=c['surface'],
                     bordercolor=c['border'], lightcolor=c['bg'], darkcolor=c['bg'], troughcolor=c['divider'],
                     focuscolor=c['accent'], selectbackground=c['accent'], selectforeground=c['on-accent'],
-                    insertcolor=c['text'], font=f['body'])
+                    insertcolor=c['text'], font=f['body'], focusthickness=2)
     style.map('.', foreground=[('disabled', c['disabled-text'])])
     style.configure('TButton', padding=(px(12), px(5)), background=c['surface'], bordercolor=c['border'])
     style.map('TButton', background=[('disabled', c['disabled-bg']), ('pressed', c['divider']),
@@ -228,6 +228,7 @@ def link_label(parent, text, command, **kw) -> tk.Label:
     f = fonts(parent)
     if not STATE['high_contrast']:
         kw.setdefault('bg', COLORS['bg'])
+    kw.setdefault('pady', px(2))  # with the 2 px focus ring, at least 24 px tall (WCAG 2.5.8)
     label = tk.Label(parent, text=text, fg=COLORS['accent'], cursor='hand2', font=f['body'],
                      takefocus=1, highlightthickness=2, highlightcolor=COLORS['accent'], **kw)
     underline = tkfont.Font(font=f['body'])

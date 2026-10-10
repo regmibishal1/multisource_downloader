@@ -88,6 +88,10 @@ def _components() -> str:
                 found.append(f'{label} not included')
     if missing:
         raise RuntimeError('bundled but cannot load: ' + '; '.join(missing))
+    from .help import HELP_FILE
+    if not HELP_FILE.is_file():
+        raise RuntimeError('the help page is missing')
+    found.append('help page')
     return ', '.join(found)
 
 
