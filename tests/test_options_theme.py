@@ -199,7 +199,7 @@ class OptionsWindowTests(unittest.TestCase):
         self.assertEqual(0, app.download_btn.cget('underline'))
         self.assertEqual([app.links, app.table.tree, app.download_btn, app.signins_btn], app.regions())
         menu = self.root.nametowidget(app.help_btn['menu'])
-        self.assertEqual('Options...', menu.entrycget(0, 'label'))
+        self.assertEqual(['Help', 'Options...'], [menu.entrycget(i, 'label') for i in (0, 1)])
 
     def test_dark_theme_builds_the_main_window(self):
         import multisource_downloader_ui as ui

@@ -13,6 +13,7 @@ import subprocess
 import tempfile
 import sys
 import threading
+import time
 import tkinter as tk
 import webbrowser
 from pathlib import Path
@@ -22,6 +23,8 @@ from typing import Callable, Optional
 from .. import signins
 from ..platforms import PLATFORMS, Platform
 from ..signins import SignInError
+from .help import help_button
+from .signin_window import TIMEOUT_SECONDS as WEBVIEW_TIMEOUT_S
 from .theme import COLORS, fonts, link_label
 
 WRAP = 500
@@ -176,6 +179,7 @@ class SignInSheet(tk.Toplevel):
         self.continue_btn = ttk.Button(self.footer, text='Continue', command=self._continue)
         self.continue_btn.pack(side=tk.LEFT)
 
+        help_button(self, 'signins')
         self.bind('<Escape>', lambda _e: self.destroy())
         self._update_continue()
         self._detect_firefox()
@@ -293,6 +297,7 @@ class SignInSheet(tk.Toplevel):
         threading.Thread(target=read, daemon=True).start()
         self._show_companion()
         self._webview_done = False
+        self._webview_deadline = time.monotonic() + WEBVIEW_TIMEOUT_S
         self._poll_webview(events)
 
     def _show_companion(self):
@@ -317,6 +322,22 @@ class SignInSheet(tk.Toplevel):
         buttons.grid(row=3, column=0, sticky='w', pady=(12, 0))
         ttk.Button(buttons, text='Cancel', command=self._cancel_webview).pack(side=tk.LEFT, padx=(0, 12))
         link_label(buttons, 'Use another way', self._back_to_cards).pack(side=tk.LEFT)
+        # a minute before the window closes by itself (WCAG 2.2.1)
+        self.still_there = ttk.Frame(self.companion)
+        ttk.Label(self.still_there, text='! Still there? The sign-in window closes in 1 minute.',
+                  foreground=COLORS['warning']).pack(side=tk.LEFT, padx=(0, 12))
+        self.keep_waiting_btn = ttk.Button(self.still_there, text='Keep waiting', command=self.keep_waiting)
+        self.keep_waiting_btn.pack(side=tk.LEFT)
+
+    def keep_waiting(self):
+        """Give the sign-in window another 10 minutes."""
+        out = getattr(self, '_webview_out', None)
+        if out:
+            with contextlib.suppress(OSError):
+                with open(out + '.more', 'w', encoding='utf-8') as fp:
+                    fp.write(str(time.time()))
+        self._webview_deadline = time.monotonic() + WEBVIEW_TIMEOUT_S
+        self.still_there.grid_remove()
 
     def _show_page(self, url):
         # the window has no address bar, so show where it is
@@ -344,11 +365,17 @@ class SignInSheet(tk.Toplevel):
                     self._webview_done = True
                 elif kind == 'error':
                     self._webview_error = event.get('message')
+                elif kind == 'timeout':
+                    self._webview_error = None
                 elif kind == 'exit':
                     self._webview_finished()
                     return
         except queue.Empty:
             pass
+        left = getattr(self, '_webview_deadline', None)
+        if left is not None and left - time.monotonic() <= 60 and not self.still_there.grid_info():
+            self.still_there.grid(row=4, column=0, sticky='w', pady=(12, 0))
+            self.keep_waiting_btn.focus_set()
         self.after(200, self._poll_webview, events)
 
     def _webview_finished(self):
@@ -387,8 +414,9 @@ class SignInSheet(tk.Toplevel):
         out = getattr(self, '_webview_out', None)
         self._webview_out = None
         if out:
-            with contextlib.suppress(OSError):
-                os.unlink(out)
+            for path in (out, out + '.more'):
+                with contextlib.suppress(OSError):
+                    os.unlink(path)
 
     def _cancel_webview(self):
         self._back_to_cards()
@@ -706,6 +734,7 @@ class DriveConnectWindow(tk.Toplevel):
         self.connect_btn = ttk.Button(footer, text='Connect', command=self._connect)
         self.connect_btn.pack(side=tk.LEFT)
         self.connect_btn.state(['disabled'])
+        help_button(self, 'signins')
         self.bind('<Escape>', lambda _e: self.destroy())
         self.grab_set()
         self.focus_set()
@@ -782,11 +811,13 @@ class SignInsWindow(tk.Toplevel):
         _caption(footer, f'Stored in: {store}', wraplength=420).grid(row=0, column=0, columnspan=2, sticky='w')
         ttk.Button(footer, text='Open folder', command=lambda: open_folder(store)).grid(row=0, column=2, sticky='e')
         remove_all = tk.Label(footer, text='Remove all sign-ins...', fg=COLORS['error'], cursor='hand2',
-                              takefocus=1, font=f['body'])
+                              takefocus=1, font=f['body'], highlightthickness=2, highlightcolor=COLORS['accent'],
+                              pady=2)
         remove_all.grid(row=1, column=0, sticky='w', pady=(12, 0))
-        remove_all.bind('<Button-1>', lambda _e: self._remove_all())
-        remove_all.bind('<Return>', lambda _e: self._remove_all())
+        for sequence in ('<Button-1>', '<Return>', '<space>'):
+            remove_all.bind(sequence, lambda _e: self._remove_all())
         ttk.Button(footer, text='Close', command=self.destroy).grid(row=1, column=2, sticky='e', pady=(12, 0))
+        help_button(self, 'signins')
         self.bind('<Escape>', lambda _e: self.destroy())
         self.refresh()
         self.focus_set()

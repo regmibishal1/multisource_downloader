@@ -313,7 +313,7 @@ class DownloaderUI:
         root.bind_all('<Control-period>', lambda _e: self.ask_stop())
         root.bind('<Control-comma>', lambda _e: self.open_options())
         root.bind('<Control-Shift-V>', lambda _e: self.toggle_view())
-        root.bind('<F1>', lambda _e: help_menu.show_shortcuts(self.root))
+        root.bind('<F1>', lambda _e: help_menu.open_help('simple' if self.view == 'simple' else 'start'))
         root.bind('<F6>', lambda _e: self.next_region(1))
         root.bind('<Shift-F6>', lambda _e: self.next_region(-1))
         # Alt + the underlined letter selects a button (brief 6.6)
@@ -976,6 +976,7 @@ class DownloaderUI:
 
 def confirm_stop(parent, waiting: int) -> bool:
     """The brief's Stop confirmation: Keep downloading is the default, Enter never stops."""
+    previous = parent.focus_get()
     dialog = tk.Toplevel(parent)
     dialog.title('Stop downloading?')
     dialog.transient(parent)
@@ -1001,6 +1002,11 @@ def confirm_stop(parent, waiting: int) -> bool:
     keep.focus_set()
     dialog.grab_set()
     parent.wait_window(dialog)
+    if previous is not None:  # focus goes back where it was (WCAG 2.4.3)
+        try:
+            previous.focus_set()
+        except tk.TclError:
+            pass
     return answer['stop']
 
 
@@ -1052,6 +1058,7 @@ def main(argv=None):
 
     root.protocol('WM_DELETE_WINDOW', close)
     app.start_update_check()
+    root.after_idle(app.links.focus_set)  # the Links box has the focus at start (WCAG 2.4.3)
     # errors in callbacks and worker threads get a dialog instead of a silent freeze
     crash.install(root, on_crash=app._reset_controls)
     root.mainloop()

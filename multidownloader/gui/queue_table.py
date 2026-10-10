@@ -24,6 +24,8 @@ GLYPHS = {
     'skipped': '⊘ Skipped',
 }
 FILTERS = ('All', 'Failed', 'Saved', 'Waiting')
+COLUMNS = (('status', 'Status', 130, False), ('platform', 'Platform', 110, False), ('link', 'Link', 240, True),
+           ('result', 'Result', 220, True))
 EMPTY = 'Nothing in the queue yet. Paste links above, then select Download.'
 
 
@@ -92,14 +94,16 @@ class QueueTable(ttk.Frame):
         self.rowconfigure(0, weight=1)
         self.tree = ttk.Treeview(self, columns=('status', 'platform', 'link', 'result'), show='headings',
                                  style='Queue.Treeview', selectmode='extended')
-        for key, label, width, stretch in (('status', 'Status', 130, False), ('platform', 'Platform', 110, False),
-                                           ('link', 'Link', 240, True), ('result', 'Result', 220, True)):
+        for key, label, _width, _stretch in COLUMNS:
             self.tree.heading(key, text=label, anchor='w')
-            self.tree.column(key, width=width, minwidth=width, stretch=stretch, anchor='w')
+        self.fit_columns()
         self.tree.grid(row=0, column=0, sticky='nsew')
         scroll = ttk.Scrollbar(self, orient='vertical', command=self.tree.yview)
         scroll.grid(row=0, column=1, sticky='ns')
-        self.tree.configure(yscrollcommand=scroll.set)
+        # the table scrolls sideways instead of cutting columns off (WCAG 1.4.10)
+        xscroll = ttk.Scrollbar(self, orient='horizontal', command=self.tree.xview)
+        xscroll.grid(row=1, column=0, sticky='ew')
+        self.tree.configure(yscrollcommand=scroll.set, xscrollcommand=xscroll.set)
         for tone in ('success', 'error', 'warning', 'text-2'):
             self.tree.tag_configure(tone, foreground=COLORS[tone])
         self.empty = ttk.Label(self, text=EMPTY, foreground=COLORS['text-2'], font=f['body'])
@@ -108,8 +112,26 @@ class QueueTable(ttk.Frame):
         self.tree.bind('<Double-1>', self._open)
         for sequence in ('<Button-3>', '<Shift-F10>', '<App>'):
             self.tree.bind(sequence, self._menu)
+        # column widths can be dragged, so they can also be reset without dragging (WCAG 2.5.7)
+        self.tree.bind('<Button-3>', self._heading_menu, add='+')
         self.tree.bind('<<TreeviewSelect>>', lambda _e: self._see_selection())
         self._refresh_empty()
+
+    def fit_columns(self):
+        """Put every column back to its starting width."""
+        for key, _label, width, stretch in COLUMNS:
+            self.tree.column(key, width=px(width), minwidth=px(width // 2), stretch=stretch, anchor='w')
+
+    def _heading_menu(self, event):
+        if self.tree.identify_region(event.x, event.y) != 'heading':
+            return None
+        menu = tk.Menu(self, tearoff=False)
+        menu.add_command(label='Fit columns', command=self.fit_columns)
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+        return 'break'
 
     # --- content -------------------------------------------------------------------
     def reset(self, links):
@@ -247,6 +269,8 @@ class QueueTable(ttk.Frame):
 
     def _menu(self, event):
         if event.type == tk.EventType.ButtonPress:
+            if self.tree.identify_region(event.x, event.y) == 'heading':
+                return None  # the heading has its own menu
             iid = self.tree.identify_row(event.y)
             if iid and iid not in self.tree.selection():
                 self.tree.selection_set(iid)

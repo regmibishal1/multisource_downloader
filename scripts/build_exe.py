@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import os
 import shutil
 import sys
 import zipfile
@@ -69,6 +70,8 @@ def build(clean: bool = True) -> Path:
         '--collect-submodules=yt_dlp',
         '--collect-data=yt_dlp_ejs',
         '--collect-submodules=multidownloader',
+        # the help page, opened from every window's (?) button
+        f'--add-data={ROOT / "multidownloader" / "gui" / "help.html"}{os.pathsep}multidownloader/gui',
         '--exclude-module=gallery_dl',  # GPL-2.0: run as a separate program only, never bundled
         '--copy-metadata=yt-dlp',
     ]
