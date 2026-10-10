@@ -88,6 +88,17 @@ def _components() -> str:
                 found.append(f'{label} not included')
     if missing:
         raise RuntimeError('bundled but cannot load: ' + '; '.join(missing))
+    if getattr(sys, 'frozen', False):
+        # gallery-dl (GPL-2.0) is never part of the Windows app, not even its package metadata
+        import importlib.util
+        from importlib import metadata
+        try:
+            metadata.version('gallery-dl')
+            raise RuntimeError("gallery-dl's package metadata is in the app; remove it from the build")
+        except metadata.PackageNotFoundError:
+            pass
+        if importlib.util.find_spec('gallery_dl') is not None:
+            raise RuntimeError('gallery-dl is bundled; it must only run as a separate program')
     from .help import HELP_FILE
     if not HELP_FILE.is_file():
         raise RuntimeError('the help page is missing')

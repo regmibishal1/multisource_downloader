@@ -81,6 +81,10 @@ def build(clean: bool = True) -> Path:
         args.append('--clean')
     PyInstaller.__main__.run(args)
     folder = dist / NAME
+    # PyInstaller copies the package metadata of every installed distribution with entry points. gallery-dl's
+    # would make the app believe gallery-dl is installed; it is GPL-2.0 and never part of the app.
+    for meta in folder.rglob('gallery_dl-*.dist-info'):
+        shutil.rmtree(meta)
     for name in ('LICENSE', 'README.md'):
         shutil.copyfile(ROOT / name, folder / name)
     # every bundled package's license, next to the exe (brief T19)

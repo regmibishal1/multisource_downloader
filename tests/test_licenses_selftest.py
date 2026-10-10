@@ -83,6 +83,7 @@ class LicenseFileTests(unittest.TestCase):
     def test_build_script_excludes_gallery_dl_and_ships_the_licenses(self):
         source = (ROOT / 'scripts' / 'build_exe.py').read_text(encoding='utf-8')
         self.assertIn("'--exclude-module=gallery_dl'", source)
+        self.assertIn("rglob('gallery_dl-*.dist-info')", source)  # not even its metadata
         self.assertIn('THIRD_PARTY_LICENSES.txt', source)
 
     def test_no_browser_cookie3(self):
