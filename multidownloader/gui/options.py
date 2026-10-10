@@ -28,7 +28,7 @@ THEME_LABELS = (('system', 'Same as Windows'), ('light', 'Light'), ('dark', 'Dar
 
 # the settings this window changes
 KEYS = ('quality', 'write_metadata', 'thumbnails', 'subtitles', 'layout', 'include_title', 'parallel', 'polite',
-        'keep_awake', 'theme')
+        'keep_awake', 'theme', 'check_updates')
 
 
 def updated(prefs: Dict, choices: Dict) -> Dict:
@@ -62,6 +62,7 @@ class OptionsWindow(tk.Toplevel):
             'parallel': tk.StringVar(),
             'write_metadata': tk.BooleanVar(), 'thumbnails': tk.BooleanVar(), 'subtitles': tk.BooleanVar(),
             'include_title': tk.BooleanVar(), 'polite': tk.BooleanVar(), 'keep_awake': tk.BooleanVar(),
+            'check_updates': tk.BooleanVar(),
         }
         self._load(prefs)
 
@@ -130,6 +131,10 @@ class OptionsWindow(tk.Toplevel):
             ttk.Radiobutton(looks, text=text, value=value, variable=self.vars['theme']).pack(side=tk.LEFT,
                                                                                           padx=(0, px(16)))
         caption('Applies the next time you open the app. Windows High Contrast always wins.')
+
+        section('Updates')
+        check('check_updates', 'Check once a day whether yt-dlp or gallery-dl needs an update')
+        caption('Asks pypi.org for the newest version numbers. Nothing about you or your links is sent.')
 
         buttons = ttk.Frame(body)
         buttons.grid(row=row, column=0, sticky='ew', pady=(px(24), 0))

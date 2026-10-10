@@ -18,6 +18,7 @@ from tkinter import filedialog, messagebox, ttk
 from typing import Optional
 
 from multidownloader import appdirs, detect, errors as errors_mod, logs, runs, session_store, settings, signins
+from multidownloader import updates
 from multidownloader.batch import links_from_file
 from multidownloader.awake import keep_awake
 from multidownloader.core import Downloader
@@ -157,6 +158,17 @@ class DownloaderUI:
         ttk.Button(self.resume_bar, text='Dismiss', command=self.dismiss_unfinished).grid(row=0, column=2)
         if offer_resume:
             self.check_unfinished()
+
+        # shown when yt-dlp or gallery-dl is out of date (brief F24); main() starts the check
+        self.update_var = tk.StringVar()
+        self.update_notices = []
+        self.update_bar = ttk.Frame(header, padding=(px(8), px(6)), relief='solid', borderwidth=1)
+        self.update_bar.columnconfigure(0, weight=1)
+        ttk.Label(self.update_bar, textvariable=self.update_var, foreground=COLORS['warning'],
+                  wraplength=px(520), justify='left').grid(row=0, column=0, sticky='w')
+        ttk.Button(self.update_bar, text='How to update', command=self.show_update_help).grid(
+            row=0, column=1, padx=(px(8), px(4)))
+        ttk.Button(self.update_bar, text='Dismiss', command=self.dismiss_updates).grid(row=0, column=2)
 
         # Links (brief 6.1): any pasted text; each link's platform is detected
         links_head = ttk.Frame(self.frm)
@@ -542,6 +554,38 @@ class DownloaderUI:
         links = [(url, handler) for url, handler in links if handler]
         self.start_download([url for url, _h in links], handlers=[h for _u, h in links], resumed=unfinished)
 
+    # --- updates (brief F24) ----------------------------------------------------------
+    def start_update_check(self):
+        """Check in the background, at most once a day; the result comes back as an event."""
+        if not self.prefs.get('check_updates', True):
+            return
+
+        def work():
+            try:
+                self._events.put(('updates', updates.check()))
+            except Exception as exc:  # never let a version check bother the user
+                logging.info('Update check failed: %s', exc)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def show_updates(self, notices):
+        self.update_notices = list(notices)
+        if not self.update_notices:
+            self.update_bar.grid_remove()
+            return
+        self.update_var.set('! ' + ' '.join(n.message for n in self.update_notices))
+        self.update_bar.grid(row=2, column=0, columnspan=5, sticky='ew', pady=(px(10), 0))
+
+    def show_update_help(self):
+        if self.update_notices:
+            window = help_menu.show_update_help(self.root, self.update_notices[0])
+            self.root.wait_window(window)
+
+    def dismiss_updates(self):
+        for notice in self.update_notices:
+            updates.dismiss(notice)
+        self.show_updates([])
+
     def dismiss_unfinished(self):
         if self.unfinished:
             self.unfinished.close('dismissed')
@@ -691,6 +735,8 @@ class DownloaderUI:
         if isinstance(event, tuple):
             if event[0] == 'finished':
                 self._run_finished(*event[1:])
+            elif event[0] == 'updates':
+                self.show_updates(event[1])
             elif event[0] == 'crashed':
                 self._reset_controls()
             return
@@ -993,6 +1039,7 @@ def main(argv=None):
         root.destroy()
 
     root.protocol('WM_DELETE_WINDOW', close)
+    app.start_update_check()
     # errors in callbacks and worker threads get a dialog instead of a silent freeze
     crash.install(root, on_crash=app._reset_controls)
     root.mainloop()

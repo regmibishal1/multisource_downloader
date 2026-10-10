@@ -46,6 +46,44 @@ def show_shortcuts(parent) -> tk.Toplevel:
     return dialog
 
 
+def show_update_help(parent, notice) -> tk.Toplevel:
+    """How to update a component: the command to run (or where to get the new app), with Copy."""
+    from .. import updates
+
+    dialog = tk.Toplevel(parent)
+    dialog.title(f'Update {notice.package}')
+    dialog.transient(parent)
+    dialog.resizable(False, False)
+    f = fonts(dialog)
+    body = ttk.Frame(dialog, padding=px(24))
+    body.pack(fill=tk.BOTH, expand=True)
+    body.columnconfigure(0, weight=1)
+    ttk.Label(body, text=notice.message, wraplength=px(480), justify='left').grid(row=0, column=0, columnspan=2,
+                                                                                sticky='w')
+    text = updates.how_to_update(notice.package)
+    command = not text.startswith('Download')
+    ttk.Label(body, text='Run this in a terminal, then restart the app:' if command else text,
+              wraplength=px(480), justify='left').grid(row=1, column=0, columnspan=2, sticky='w', pady=(px(12), 0))
+    buttons = ttk.Frame(body)
+    buttons.grid(row=3, column=0, columnspan=2, sticky='e', pady=(px(16), 0))
+    if command:
+        var = tk.StringVar(value=text)
+        entry = ttk.Entry(body, textvariable=var, state='readonly', font=f['mono'], width=60)
+        entry.grid(row=2, column=0, sticky='ew', pady=(px(8), 0))
+
+        def copy():
+            dialog.clipboard_clear()
+            dialog.clipboard_append(text)
+
+        ttk.Button(body, text='Copy', command=copy).grid(row=2, column=1, sticky='e', padx=(px(8), 0),
+                                                         pady=(px(8), 0))
+    close = ttk.Button(buttons, text='Close', command=dialog.destroy)
+    close.pack(side=tk.LEFT)
+    dialog.bind('<Escape>', lambda _e: dialog.destroy())
+    close.focus_set()
+    return dialog
+
+
 def copy_diagnostics(widget) -> str:
     """Put the redacted diagnostics on the clipboard (for a bug report) and return them."""
     text = logs.diagnostics()
@@ -74,4 +112,4 @@ def build_menu(parent, *, on_options, on_open_logs, on_status=None, on_toggle_vi
     return menu
 
 
-__all__ = ['SHORTCUTS', 'build_menu', 'copy_diagnostics', 'show_shortcuts']
+__all__ = ['SHORTCUTS', 'build_menu', 'copy_diagnostics', 'show_shortcuts', 'show_update_help']

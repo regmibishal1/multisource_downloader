@@ -42,6 +42,7 @@ def defaults() -> Dict[str, Any]:
         'polite': True,             # random pause between links from one platform
         'theme': 'system',          # system | light | dark
         'view': 'full',             # full | simple (brief F21)
+        'check_updates': True,      # once a day, ask pypi.org for the newest yt-dlp and gallery-dl (F24)
     }
 
 
@@ -83,6 +84,7 @@ _VALIDATORS = {
     'polite': lambda v: isinstance(v, bool),
     'theme': lambda v: v in THEMES,
     'view': lambda v: v in ('full', 'simple'),
+    'check_updates': lambda v: isinstance(v, bool),
 }
 
 
