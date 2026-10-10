@@ -11,7 +11,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from multidownloader import detect, logs, runs, session_store, signins
+from multidownloader import detect, errors as errors_mod, logs, runs, session_store, signins
 from multidownloader.awake import keep_awake
 from multidownloader.core import Downloader
 from multidownloader.gui import crash
@@ -219,8 +219,8 @@ class DownloaderUI:
                     elif result.status == 'already_saved':
                         logging.info('Already saved %s on %s', url, result.previous['saved_at'][:10])
                     else:
-                        errors.append((url, result.error_detail or result.error_message or ''))
-                        logging.error('Core download error for %s: %s', url, result.error_message)
+                        errors.append((url, result))
+                        logging.error('Not saved %s: %s (%s)', url, result.error_message, result.error_detail)
         except BaseException:
             # the run stays unfinished on disk, so it is offered for resuming;
             # the crash handler shows the error
@@ -247,8 +247,11 @@ class DownloaderUI:
         self.status_var.set(f'Done. {saved} saved, {len(errors)} failed.{report}')
         self.root.title(f'Done: {saved} saved, {len(errors)} failed - Multi-Source Downloader')
 
+        infos = [(url, errors_mod.ErrorInfo(r.error_kind or errors_mod.UNKNOWN, r.error_message or '',
+                                            r.error_action, r.error_detail or '')) for url, r in errors]
         platform = BY_HANDLER.get(source)
-        auth_failed = [url for url, msg in errors if signins.looks_like_auth_error(msg)]
+        # sign-in errors only; limits and bot checks never lead to a sign-in prompt
+        auth_failed = [url for url, info in infos if info.needs_signin]
         if platform and platform.cookie_domains and auth_failed:
             noun = 'link needs' if len(auth_failed) == 1 else 'links need'
             reason = f'{len(auth_failed)} {noun} a {platform.name} sign-in.'
@@ -260,10 +263,13 @@ class DownloaderUI:
                 self.refresh_signin_summary()
                 return
 
-        listed = '\n\n'.join(f'{url}\n{msg}' for url, msg in errors[:MAX_LISTED_ERRORS])
-        more = len(errors) - MAX_LISTED_ERRORS
-        if more > 0:
-            listed += f'\n\n...and {more} more. Details are in {logs.log_path()}.'
+        # one block per cause: "3 links: This post was deleted or the link is wrong."
+        blocks = []
+        for info, group_urls in errors_mod.group(infos)[:MAX_LISTED_ERRORS]:
+            noun = 'link' if len(group_urls) == 1 else 'links'
+            shown = '\n'.join(group_urls[:3]) + (f'\n...and {len(group_urls) - 3} more' if len(group_urls) > 3 else '')
+            blocks.append(f'{len(group_urls)} {noun}: {info.message}\n{shown}')
+        listed = '\n\n'.join(blocks) + f'\n\nDetails are in {logs.log_path()}.'
         messagebox.showerror('Some downloads failed', listed, parent=self.root)
 
 

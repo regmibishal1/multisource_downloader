@@ -111,6 +111,26 @@ What each run saves
 - Links saved in earlier runs, even shared in another format, are recorded as "already saved" and not downloaded again. The list lives in `history.sqlite` in your user data folder (`%LOCALAPPDATA%\multisource-downloader` on Windows).
 - Without ffmpeg, some videos are saved as separate video and audio files. Install ffmpeg (`winget install Gyan.FFmpeg`) for single merged files.
 
+Troubleshooting
+---------------
+
+When a link is not saved, the app says why in plain words and what to do. The batch tool groups them at the end, for example `7 links: This post needs you to be signed in to Facebook. Run: multidownloader-signin import facebook --browser firefox`. The library's own error text is in the log.
+
+| Message | What to do |
+|---|---|
+| This post needs you to be signed in to {platform}. | Add a sign-in: Sign-ins in the window, or `multidownloader-signin import <platform> --browser firefox`. |
+| {platform} did not accept your sign-in. Sign in again. | The saved sign-in expired or was signed out; sign in again. |
+| This post is private. Sign in with an account that can see it. | Only accounts that follow or were given access can save it. |
+| {platform} is limiting requests. | Wait and run the same list again later; saved links are skipped. |
+| YouTube is limiting this computer. | Wait an hour and try with fewer links. Signing in does not help with this. |
+| This post was deleted or the link is wrong. | Check the link in a browser; the Internet Archive may have a copy. |
+| This post is blocked in your region. | The platform does not show it in your country. |
+| {platform} changed something and the downloader needs an update. | `python -m pip install -U yt-dlp` (in `penv`: `.\penv\Scripts\python.exe -m pip install -U yt-dlp`). |
+| ffmpeg / Deno is not installed. | `winget install Gyan.FFmpeg`, `winget install DenoLand.Deno`. |
+| Could not connect. Check your internet connection. | Check the connection and run the list again. |
+| Could not save the file: the drive is full. | Free up space or choose another folder. |
+| Something went wrong. Details are in the log. | For a bug report, run `python -m multidownloader.logs` and paste the output. |
+
 Sessions and credential storage
 -------------------------------
 
