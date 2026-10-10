@@ -210,7 +210,11 @@ class Runner:
                         pending.remove(job)
                         busy[host] = busy.get(host, 0) + 1
                         self._emit(JobStarted(job.index, job.url))
-                        running[pool.submit(self._download, job)] = job
+                        future = pool.submit(self._download, job)
+                        # wake the loop once the result is ready: a wake-up sent from inside the job, just
+                        # before it returns, could find the future not done yet and then sleep the full timeout
+                        future.add_done_callback(lambda _f: self._wake.set())
+                        running[future] = job
 
                     # wait for a job to finish, a host to become free, or Stop
                     waits = [ready_at[j.host] - now for j in pending if ready_at.get(j.host, 0) > now]
@@ -236,11 +240,7 @@ class Runner:
         options = dict(job.options)
         options['cancel_event'] = self.cancel
         options['progress'] = lambda downloaded, total, speed: self._progress(job, downloaded, total, speed)
-        try:
-            result = self.run_.download(self.downloader, job.handler, job.url, options, hint=job.hint,
-                                        record=False)
-        finally:
-            self._wake.set()
+        result = self.run_.download(self.downloader, job.handler, job.url, options, hint=job.hint, record=False)
         if self.cancel.is_set() and result.status == 'failed':
             # stopped mid-download: staging was removed, nothing half-saved remains
             result.status = 'stopped'
