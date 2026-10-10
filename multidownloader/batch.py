@@ -110,6 +110,24 @@ def links_from_file(path) -> List[str]:
     return detect.extract_urls(path.read_text(encoding='utf-8', errors='replace'))
 
 
+def read_input(path: Path, fmt: Optional[str] = None) -> List[ManifestItem]:
+    """The scraper's JSON or CSV with each link's platform, else every link in the file as text."""
+    path = Path(path)
+    if fmt or path.suffix.lower() in ('.json', '.csv'):
+        try:
+            items = load_manifest(path, fmt=fmt)
+        except (ValueError, KeyError, TypeError):
+            if fmt:
+                raise
+            items = []
+        # each entry must hold a real link; anything else is read as text below
+        items = [ManifestItem(source_hint=item.source_hint, url=normalize_url(url))
+                 for item in items for url in detect.extract_urls(item.url)]
+        if items:
+            return items
+    return [ManifestItem(source_hint='', url=normalize_url(url)) for url in links_from_file(path)]
+
+
 def execute_batch(
     items: Iterable[ManifestItem],
     out_dir: Path,
@@ -282,9 +300,10 @@ def report_failures(results, logger) -> None:
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description='Download items listed by loot_report_scraper outputs.')
+    parser = argparse.ArgumentParser(description='Download every link in a file.')
     parser.add_argument('input', type=Path, nargs='?',
-                        help='Path to grouped_by_source.json or grouped_by_source.csv')
+                        help='A file with links: any text (.txt, notes, a chat export, a web page), or '
+                             "loot_report_scraper's grouped_by_source.json or .csv")
     parser.add_argument('--format', choices=['json', 'csv'], help='Override input format')
     parser.add_argument('--out-dir', type=Path, default=DEFAULT_OUTPUT_DIR, help='Download destination directory')
     parser.add_argument('--limit', type=int, help='Maximum total items to attempt')
@@ -330,7 +349,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     else:
         if unfinished:
             logger.warning('%s Run with --resume to finish it.', unfinished.message())
-        manifest = load_manifest(args.input, fmt=args.format)
+        manifest = read_input(args.input, fmt=args.format)
     unique, duplicates = detect.unique_urls(item.url for item in manifest)
     logger.info(detect.summarize(unique, duplicates))
     # informational only: the run goes ahead without a sign-in
