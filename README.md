@@ -79,7 +79,7 @@ From the command line:
 
 `import` shows the terms notice and asks you to type `yes`; pass `--accept-terms` when running without a terminal.
 
-Google Drive: public links need nothing. For files shared with your Google account, use your Firefox sign-in or a google.com cookies file (needs gdown 6 or newer). The advanced alternative, **Connect with your own Google Cloud project**, walks through creating a free Desktop OAuth client and signs in through your normal browser. Google signs you out every 7 days while that project is in Testing status, and the app tells you when that happens. A `client_secrets.json` left in the project root by older versions is copied into `multidownloader/.sessions/googledrive/`.
+Google Drive: public links need nothing. For files shared with your Google account, use your Firefox sign-in or a google.com cookies file (needs gdown 6 or newer). The advanced alternative, **Connect with your own Google Cloud project**, walks through creating a free Desktop OAuth client and signs in through your normal browser. Google signs you out every 7 days while that project is in Testing status, and the app tells you when that happens. A `client_secrets.json` left in the project root by older versions is copied into the Google Drive sign-in folder.
 
 Batch CLI (loot_report_scraper integration)
 ------------------------------------------
@@ -111,7 +111,12 @@ What each run saves
 Sessions and credential storage
 -------------------------------
 
-All sign-ins live under `multidownloader/.sessions/` (already ignored by git), one folder per platform (`instagram/`, `twitter/`, `youtube/`, `googledrive/`, ...):
+All sign-ins live in your user data folder, one folder per platform (`instagram/`, `twitter/`, `youtube/`, `googledrive/`, ...) under `sessions/`:
+- Windows: `%LOCALAPPDATA%\multisource-downloader\sessions`
+- macOS: `~/Library/Application Support/multisource-downloader/sessions`
+- Linux: `~/.local/share/multisource-downloader/sessions`
+
+On macOS and Linux the folders are readable only by you. Older versions kept sign-ins in `multidownloader/.sessions/` next to the code; the app moves them on first start (each file is copied and checked byte for byte before the old copy is deleted). Each platform folder holds:
 - `cookies.txt`: the platform's cookies only, in Netscape format. yt-dlp and Instaloader both read it.
 - `signin.json`: how you signed in, the account id, when the sign-in expires, and which version of the platform's terms notice you accepted.
 - `instagram/*.session` and `googledrive/credentials.json`: Instaloader sessions and PyDrive2 tokens.
@@ -148,5 +153,6 @@ The bridge script invokes `multidownloader.batch` with the latest `grouped_by_so
 Security reminders
 ------------------
 
-- Session files and cookies grant authenticated access. Keep `.sessions/` private and never commit its contents.
+- Session files and cookies grant authenticated access. Keep the sessions folder private and never share it.
+- Logs go to `app.log` in the `Logs` folder next to `sessions` on Windows (`~/Library/Logs/multisource-downloader` on macOS, `~/.local/state/multisource-downloader/log` on Linux), 1 MB per file, last 5 kept. Cookie values, passwords, sign-in headers and your home folder path are removed before anything is written. For a bug report, run `python -m multidownloader.logs` and paste its output.
 - Rotate cookies or rerun authentication if downloads start failing with auth errors.

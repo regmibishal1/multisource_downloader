@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from . import detect, platforms, signins
+from . import detect, logs, platforms, session_store, signins
 from .core import Downloader
 from .history import History
 from .runs import Run
@@ -209,7 +209,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
+    logs.setup(logging.DEBUG if args.verbose else logging.INFO)
+    session_store.migrate_legacy_sessions()
     logger = logging.getLogger('multidownloader.batch')
 
     manifest = load_manifest(args.input, fmt=args.format)

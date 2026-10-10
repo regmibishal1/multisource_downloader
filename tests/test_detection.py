@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from multidownloader.batch import detect_handler, main
 
@@ -57,6 +58,11 @@ class ExitCodeTests(unittest.TestCase):
     def setUp(self):
         logging.disable(logging.CRITICAL)
         self.addCleanup(logging.disable, logging.NOTSET)
+        # main() moves old sign-ins and opens the user's log file: never from tests
+        for target in ('multidownloader.session_store.migrate_legacy_sessions', 'multidownloader.logs.setup'):
+            patcher = mock.patch(target)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def _run(self, data):
         with tempfile.TemporaryDirectory() as tmp:

@@ -60,12 +60,15 @@ class HistoryTests(unittest.TestCase):
         self.assertEqual(1, self.history.count())
 
     def test_user_data_dir(self):
-        with mock.patch.object(history.sys, 'platform', 'win32'), \
-                mock.patch.dict(history.os.environ, {'LOCALAPPDATA': r'C:\Users\u\AppData\Local'}):
+        from multidownloader import appdirs
+        with mock.patch.object(appdirs.sys, 'platform', 'win32'), \
+                mock.patch.dict(appdirs.os.environ, {'LOCALAPPDATA': r'C:\Users\u\AppData\Local'}):
             self.assertEqual(Path(r'C:\Users\u\AppData\Local') / 'multisource-downloader', history.user_data_dir())
-        with mock.patch.object(history.sys, 'platform', 'linux'), \
-                mock.patch.dict(history.os.environ, {'XDG_DATA_HOME': '/home/u/.data'}):
+            self.assertEqual(Path(r'C:\Users\u\AppData\Local') / 'multisource-downloader' / 'Logs', appdirs.log_dir())
+        with mock.patch.object(appdirs.sys, 'platform', 'linux'), \
+                mock.patch.dict(appdirs.os.environ, {'XDG_DATA_HOME': '/home/u/.data', 'XDG_STATE_HOME': '/home/u/.st'}):
             self.assertEqual(Path('/home/u/.data/multisource-downloader'), history.user_data_dir())
+            self.assertEqual(Path('/home/u/.st/multisource-downloader/log'), appdirs.log_dir())
 
 
 class SkipDoneTests(unittest.TestCase):
