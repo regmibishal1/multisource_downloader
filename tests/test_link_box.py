@@ -122,7 +122,9 @@ class LinkBoxTests(unittest.TestCase):
                     mock.patch.object(self.app, 'save_prefs'):
                 thread.return_value.start.side_effect = lambda: started.append(thread.call_args.kwargs['args'])
                 self.app.start_download()
-            _downloader, run, links, _source = started[0]
+            _downloader, run, links, _source, prefs = started[0]
+            self.assertEqual(self.app.prefs, prefs)
+            self.assertIsNot(self.app.prefs, prefs)  # a copy: Options changes apply to the next run
             self.assertEqual([('https://x.com/a/status/1', 'Twitter'), ('https://youtu.be/abc123', 'YouTube')], links)
             self.assertEqual(['unsupported'], [r.skip_reason for r in run.results])
             self.assertEqual('disabled', str(self.app.links.cget('state')))  # read-only during the run
