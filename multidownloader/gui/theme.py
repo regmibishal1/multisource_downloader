@@ -28,7 +28,9 @@ def fonts(root: tk.Misc) -> dict:
         return _FONTS[key]
     base = tkfont.nametofont('TkDefaultFont')
     family = base.actual('family')
+    heading = tkfont.nametofont('TkHeadingFont').actual('family')
     made = {
+        'title': tkfont.Font(root=root, family=heading, size=14, weight='bold'),
         'section': tkfont.Font(root=root, family=family, size=11, weight='bold'),
         'body': tkfont.Font(root=root, family=family, size=10),
         'bold': tkfont.Font(root=root, family=family, size=10, weight='bold'),

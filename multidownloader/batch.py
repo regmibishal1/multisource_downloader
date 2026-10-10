@@ -66,6 +66,8 @@ def _from_json(path: Path) -> Iterable[ManifestItem]:
         for source, urls in data.items():
             if isinstance(urls, dict):
                 urls = urls.get('items') or []
+            if isinstance(urls, str):
+                urls = [urls]  # one link, not a sequence of characters
             if not isinstance(urls, Sequence):
                 continue
             for url in urls:
@@ -92,6 +94,20 @@ def _from_csv(path: Path) -> Iterable[ManifestItem]:
             parts = [p.strip() for p in items_field.split(',') if p.strip()]
             for part in parts:
                 yield ManifestItem(source_hint=source, url=normalize_url(part))
+
+
+def links_from_file(path) -> List[str]:
+    """Every link in a file: the scraper's JSON or CSV manifest, or any text (chat export, notes, HTML)."""
+    path = Path(path)
+    if path.suffix.lower() in ('.json', '.csv'):
+        try:
+            found = [url for item in load_manifest(path) for url in detect.extract_urls(item.url)]
+        except (ValueError, KeyError, TypeError):
+            found = []
+        if found:
+            return found
+        # not the scraper's format: read it as text
+    return detect.extract_urls(path.read_text(encoding='utf-8', errors='replace'))
 
 
 def execute_batch(

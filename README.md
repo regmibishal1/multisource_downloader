@@ -56,7 +56,9 @@ UI notes
 --------
 
 - Files are saved to `Downloads\Multisource` in your home folder unless you choose another folder.
-- Select any supported source from the dropdown. Google Drive links try public access first and use your Drive sign-in only when Drive refuses the link.
+- Paste links, or any text that contains them (a chat export, an e-mail, notes), into the Links box, or use **Import file...** (Ctrl+O) for a `.txt`, `.csv`, `.json` or HTML file. Each link's platform is detected; there is nothing to choose. The line under the box says what was found, for example `12 links found: Instagram 5, X (Twitter) 4. 2 duplicates removed. 1 not supported.`, and links from unsupported sites are listed in the run report as skipped.
+- The download folder and the window's size are remembered (`settings.json` in your user data folder). Ctrl+Enter starts, Ctrl+L goes to the Links box.
+- Google Drive links try public access first and use your Drive sign-in only when Drive refuses the link.
 - Public posts download without signing in. When a download needs a sign-in, the app offers to set one up after the run, and **Sign-ins** (top right) shows every platform's status.
 
 Sign-ins

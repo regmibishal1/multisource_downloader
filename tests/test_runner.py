@@ -9,14 +9,10 @@ from multidownloader import errors, runs
 from multidownloader.runner import HostWaiting, Job, JobFinished, JobProgress, JobStarted, RunFinished, Runner
 from multidownloader.runs import Run
 
-try:
+from gui_gate import HAVE_DISPLAY, REASON as GUI_REASON
+
+if HAVE_DISPLAY:
     import tkinter as tk
-    _r = tk.Tk()
-    _r.withdraw()
-    _r.destroy()
-    HAVE_DISPLAY = True
-except Exception:
-    HAVE_DISPLAY = False
 
 
 class TimedDownloader:
@@ -194,7 +190,7 @@ class ProgressHookTests(unittest.TestCase):
             self.assertNotIn('progress_hooks', YtDlpHandler('YouTube')._build_opts(tmp, {}, None))
 
 
-@unittest.skipUnless(HAVE_DISPLAY, 'needs a display')
+@unittest.skipUnless(HAVE_DISPLAY, GUI_REASON)
 class WindowProgressTests(unittest.TestCase):
     def setUp(self):
         self.root = tk.Tk()
