@@ -127,10 +127,14 @@ class InstagramHandler:
 
         # Point Instaloader at out_dir instead of changing the process working
         # directory, which is not thread safe. Braces in the path are escaped
-        # because Instaloader treats the pattern as a format string.
+        # because Instaloader treats the pattern as a format string. Layout:
+        # instagram/<account>/<YYYY-MM-DD>_<shortcode>[_<n>].<ext>; Instaloader
+        # adds _1, _2... for the items of a carousel and names the JSON alike.
         escaped_dir = str(out_dir).replace('{', '{{').replace('}', '}}')
         previous_pattern = loader.dirname_pattern
-        loader.dirname_pattern = os.path.join(escaped_dir, '{target}')
+        previous_filename = loader.filename_pattern
+        loader.dirname_pattern = os.path.join(escaped_dir, 'instagram', '{profile}')
+        loader.filename_pattern = '{date_utc:%Y-%m-%d}_{shortcode}'
         # keep the post's JSON (caption, owner, time) readable next to the media
         loader.save_metadata = True
         loader.compress_json = False
@@ -153,6 +157,7 @@ class InstagramHandler:
                     raise RuntimeError(f'Failed to download Instagram post {shortcode}: {message}')
         finally:
             loader.dirname_pattern = previous_pattern
+            loader.filename_pattern = previous_filename
 
     # ------------------------------------------------------------------
     def _ensure_loader(self, loader, auth_mode: str):

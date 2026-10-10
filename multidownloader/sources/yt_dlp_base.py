@@ -17,7 +17,25 @@ except Exception:  # pragma: no cover - module might be missing in minimal envs
     YTDLP_AVAILABLE = False
 
 from .. import session_store, signins
+from ..platforms import BY_HANDLER
 
+
+# Output layout (brief T10): <platform>/<account>/<YYYY-MM-DD>_<post id>[_<n>].<ext>
+# The date is the post's date, or the download date when the site gives none;
+# n numbers the items of a multi-item post. Titles stay out of file names (they
+# are long, often non-ASCII and the main cause of Windows path-length
+# failures) unless asked for, and then cut to 60 characters. yt-dlp names the
+# .info.json and thumbnail after the media, so they sit next to it.
+ACCOUNT_FIELD = '%(uploader,channel,uploader_id,creator|unknown)s'
+DATE_FIELD = '%(upload_date>%Y-%m-%d,epoch>%Y-%m-%d)s'
+TITLE_LENGTH = 60
+
+
+def layout_template(platform_key: str, include_title: bool = False) -> str:
+    name = f'{DATE_FIELD}_%(id)s%(playlist_index&_{{}}|)s'
+    if include_title:
+        name += f'_%(title).{TITLE_LENGTH}s'
+    return f'{platform_key}/{ACCOUNT_FIELD}/{name}.%(ext)s'
 
 NO_FFMPEG_MESSAGE = 'ffmpeg is not installed, so some videos are saved as separate video and audio files.'
 _warned = []
@@ -82,7 +100,10 @@ class YtDlpHandler:
     def __init__(self, source_key: str, *, logger: Optional[logging.Logger] = None, outtmpl: Optional[str] = None):
         self.source_key = source_key
         self.logger = logger or logging.getLogger(f'multidownloader.{source_key.lower()}')
-        self.outtmpl = outtmpl or '%(title)s [%(id)s].%(ext)s'
+        # None: the shared layout for this platform (layout_template)
+        self.outtmpl = outtmpl
+        platform = BY_HANDLER.get(source_key)
+        self.platform_key = platform.key if platform else source_key.lower()
         session_store.ensure_session_dir(self.source_key)
 
     # --- hooks for subclasses -------------------------------------------------
@@ -122,8 +143,16 @@ class YtDlpHandler:
 
     # --- internal helpers ----------------------------------------------------
     def _build_opts(self, out_dir: str, options: Dict, cookie_path: Optional[Path]) -> Dict:
+        template = self.outtmpl or layout_template(self.platform_key, bool(options.get('include_title')))
         base_opts: Dict = {
-            'outtmpl': os.path.join(out_dir, self.outtmpl),
+            # The folder goes in paths, not in the template: trim_file_name
+            # shortens the evaluated template, and with the folder inside it a
+            # long folder path was cut short and files landed outside out_dir.
+            'paths': {'home': str(out_dir), 'temp': str(out_dir)},
+            'outtmpl': template,
+            # names that are valid on Windows, FAT and exFAT drives too
+            'windowsfilenames': True,
+            'trim_file_name': 120,
             'noplaylist': True,
             'quiet': True,
             'no_warnings': True,
@@ -183,4 +212,5 @@ class YtDlpHandler:
         return signins.cookie_file_for_download(self.source_key)
 
 
-__all__ = ['YtDlpHandler', 'YTDLP_AVAILABLE', 'NO_FFMPEG_MESSAGE', 'ffmpeg_available', 'scrub_info_json']
+__all__ = ['YtDlpHandler', 'YTDLP_AVAILABLE', 'NO_FFMPEG_MESSAGE', 'ffmpeg_available', 'layout_template',
+           'scrub_info_json']
