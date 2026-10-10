@@ -26,6 +26,13 @@ def data_dir() -> Path:
     return Path(os.environ.get('XDG_DATA_HOME') or Path.home() / '.local' / 'share') / APP_NAME
 
 
+def config_dir() -> Path:
+    """Where settings.json lives: the data folder on Windows and macOS, $XDG_CONFIG_HOME on Linux."""
+    if sys.platform == 'win32' or sys.platform == 'darwin':
+        return data_dir()
+    return Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config') / APP_NAME
+
+
 def log_dir() -> Path:
     if sys.platform == 'win32' and os.environ.get('LOCALAPPDATA'):
         return data_dir() / 'Logs'
@@ -42,4 +49,4 @@ def private_dir(path: Path) -> Path:
     return path
 
 
-__all__ = ['APP_NAME', 'data_dir', 'log_dir', 'private_dir']
+__all__ = ['APP_NAME', 'config_dir', 'data_dir', 'log_dir', 'private_dir']
