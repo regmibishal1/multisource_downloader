@@ -118,6 +118,7 @@ class LinkBoxTests(unittest.TestCase):
             started = []
             with mock.patch.object(self.ui, 'History'), \
                     mock.patch.object(self.ui.runs, 'default_last_run_pointer', return_value=Path(tmp) / 'p.json'), \
+                    mock.patch.object(self.ui.custody, 'default_anchor_path', return_value=Path(tmp) / 'a.log'), \
                     mock.patch.object(self.ui.threading, 'Thread') as thread, \
                     mock.patch.object(self.app, 'save_prefs'):
                 thread.return_value.start.side_effect = lambda: started.append(thread.call_args.kwargs['args'])

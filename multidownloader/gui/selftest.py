@@ -119,7 +119,8 @@ def _fake_run(tmp: Path) -> str:
     from ..runner import Job, Runner
     from ..runs import Run, read_manifest
 
-    run = Run(tmp / 'out', history=History(tmp / 'history.sqlite'))
+    anchors = tmp / 'anchors.log'
+    run = Run(tmp / 'out', history=History(tmp / 'history.sqlite'), anchor_path=anchors)
     try:
         results = Runner(run, _FakeDownloader(), delays={}, default_delay=(0, 0)).run([Job(FAKE_URL, 'Twitter')])
     finally:
@@ -130,7 +131,11 @@ def _fake_run(tmp: Path) -> str:
     sums = (run.dir / 'SHA256SUMS.txt').read_text(encoding='utf-8')
     if len(rows) != 1 or not (run.dir / 'manifest.csv').exists() or '2026-01-01_1.jpg' not in sums:
         raise RuntimeError('the run folder is incomplete')
-    return f'{len(results[0].files)} file, manifest and SHA256SUMS written'
+    from .. import verify
+    report = verify.verify(run.dir, check_custody=True, anchor_path=anchors)
+    if not report.ok:
+        raise RuntimeError('verify failed: ' + ' '.join(report.lines()))
+    return f'{len(results[0].files)} file, manifest, SHA256SUMS and custody log written and verified'
 
 
 def _fake_signin(tmp: Path) -> str:

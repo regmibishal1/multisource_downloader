@@ -81,8 +81,15 @@ class RunnerTests(unittest.TestCase):
         self.assertTrue(all(r.status == 'saved' for r in results))
         self.assertEqual(3, fake.max_total)
         self.assertEqual({1}, set(fake.max_active.values()))  # never two at once on one site
-        self.assertLess(elapsed, 9 * 0.15 * 0.75)  # clearly faster than one at a time
         self.assertEqual(9, len(runs.read_manifest(self.run.dir / 'manifest.jsonl')))
+        # clearly faster than one at a time on the same machine (disk flushes cost the same in both)
+        serial_run = Run(Path(self.run.root.parent) / 'serial')
+        self.addCleanup(serial_run.finish)
+        started = time.monotonic()
+        Runner(serial_run, TimedDownloader(0.15), max_parallel=1, delays={}, default_delay=(0, 0)).run(
+            self.jobs(urls))
+        serial = time.monotonic() - started
+        self.assertLess(elapsed, serial * 0.75, (elapsed, serial))
 
     def test_instagram_is_always_one_at_a_time(self):
         fake = TimedDownloader(0.1)

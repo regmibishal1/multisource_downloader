@@ -30,6 +30,7 @@ all = ["multisource-downloader[instagram,drive,webview,images]"]
 dev = ["ruff>=0.6"]
 
 [project.scripts]
+msdl = "multidownloader.cli:main"
 multidownloader-batch = "multidownloader.batch:main"
 multidownloader-signin = "multidownloader.signin_cli:main"
 

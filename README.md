@@ -17,7 +17,7 @@ python -m pip install "multisource-downloader[all] @ git+https://github.com/regm
 multisource-downloader
 ```
 
-That adds three commands: `multisource-downloader` (the window), `multidownloader-batch` (lists of links) and `multidownloader-signin` (sign-ins). Instead of `all` you can pick only what you need: `instagram`, `drive`, `webview` ("Sign in here"), `images` (photo posts and Bluesky).
+That adds four commands: `multisource-downloader` (the window), `multidownloader-batch` (lists of links), `multidownloader-signin` (sign-ins) and `msdl` (archive tools: verify). Instead of `all` you can pick only what you need: `instagram`, `drive`, `webview` ("Sign in here"), `images` (photo posts and Bluesky).
 
 Two programs that are not Python packages help with videos:
 
@@ -97,7 +97,8 @@ What each run saves
 - Files are named `<platform>/<account>/<YYYY-MM-DD>_<post id>.<ext>` (for example `youtube/jawed/2005-04-24_jNQXAC9IVRw.webm`), numbered `_1`, `_2` for posts with several items. The date is the post's date, or the download date when the site gives none. Options can drop the account or platform folders. Google Drive files keep their own names under `gdrive/<file id>/`.
 - Next to the media: the post's details (yt-dlp's `.info.json`, Instaloader's `.json`, or a `.drive.json`) and the thumbnail. Cookies are removed from `.info.json` files, and nothing is embedded into the media.
 - Each link downloads into `_staging/` first and is moved into place once complete. An existing file is never overwritten: a different file with the same name is saved as `name (2).ext`, an identical one is kept once.
-- Every run writes `_runs/<run id>/` with `manifest.jsonl`, `manifest.csv` and `SHA256SUMS.txt`. To check later that no file changed, run `sha256sum -c _runs/<run id>/SHA256SUMS.txt` from the download folder. Every field is described in [docs/manifest.md](docs/manifest.md).
+- Every run writes `_runs/<run id>/` with `manifest.jsonl`, `manifest.csv`, `SHA256SUMS.txt` and `custody.log`, an append-only record of what happened to the files whose latest hash is also kept outside the download folder. Every field is described in [docs/manifest.md](docs/manifest.md), and [docs/how-it-works.md](docs/how-it-works.md) explains what each downloader does to a file and what the records can and cannot prove.
+- To check later that nothing changed, run `msdl verify <download folder>\_runs\<run id>`: it re-hashes every file and says "All 214 files match." or lists the changed and missing ones (exit code 0 or 1). `--custody` also checks the custody log against its anchors. `sha256sum -c _runs/<run id>/SHA256SUMS.txt` from the download folder works too.
 - Links saved in earlier runs, even shared in another format, are recorded as "already saved". The list is `history.sqlite` in your user data folder.
 
 Supported platforms and what downloads them: YouTube, X, TikTok, Threads, Reddit and Facebook with yt-dlp; Instagram with Instaloader; Google Drive with gdown and PyDrive2; Bluesky and image posts (photo-only X posts, Reddit, TikTok and Facebook photo posts) with gallery-dl. Image-only Threads posts are not supported yet.
