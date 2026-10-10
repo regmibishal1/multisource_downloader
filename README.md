@@ -28,11 +28,19 @@ Quick start
     .\penv\Scripts\activate
     ```
 
-2. Install the packages you need:
+2. Install the packages. `requirements.txt` pins exact versions for `penv`. Running it again in an existing `penv` upgrades yt-dlp:
 
     ```powershell
     .\penv\Scripts\python.exe -m pip install -r requirements.txt
     ```
+
+    Or install the project as a package with only the platforms you need (`instagram`, `drive`, or `all`). This works on Windows, macOS and Linux, and adds the `multisource-downloader` (window) and `multidownloader-batch` (CLI) commands:
+
+    ```powershell
+    python -m pip install ".[all]"
+    ```
+
+    YouTube downloads also need [Deno](https://docs.deno.com/runtime/getting_started/installation/) installed. Without it yt-dlp cannot solve YouTube's JavaScript challenges, and some formats are missing.
 
 3. Launch the UI:
 
