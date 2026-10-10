@@ -112,8 +112,16 @@ def progress_hook(cancel_event=None, progress=None):
     return hook
 
 
+YTDLP_MISSING = 'yt-dlp is not installed. Install it with: python -m pip install yt-dlp'
+
+
 class YtDlpHandler:
-    """Base handler that wraps yt_dlp with cookie/session persistence support."""
+    """Base handler that wraps yt_dlp with cookie/session persistence support (a backends.base.Backend)."""
+
+    name = 'yt-dlp'
+
+    def available(self):
+        return (True, '') if YTDLP_AVAILABLE else (False, YTDLP_MISSING)
 
     source_key: str = 'generic'
     logger: logging.Logger
@@ -135,7 +143,7 @@ class YtDlpHandler:
     # --- public API ----------------------------------------------------------
     def download(self, url: str, out_dir: str, options: Optional[Dict] = None):
         if not YTDLP_AVAILABLE:
-            raise RuntimeError('yt-dlp not available - install it to use this handler')
+            raise RuntimeError(YTDLP_MISSING)
 
         options = options or {}
         os.makedirs(out_dir, exist_ok=True)

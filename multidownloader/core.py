@@ -15,6 +15,7 @@ from .sources.tiktok import TikTokHandler
 from .sources.twitter import TwitterHandler
 from .sources.youtube import YouTubeHandler
 from . import errors, platforms, signins
+from .backends.base import require
 
 THREADS_IMAGES = 'Image posts from Threads are not supported yet.'
 
@@ -40,11 +41,16 @@ class Downloader:
         """Return the list of supported source names."""
         return list(self.handlers.keys())
 
+    def backend_status(self):
+        """[(source, backend name, available, reason)] for diagnostics."""
+        return [(source, h.name, *h.available()) for source, h in self.handlers.items()]
+
     def download(self, source_name, url, options=None, out_dir=None):
         """Download url with the named handler into out_dir (default: the Downloader's folder)."""
         if source_name not in self.handlers:
             raise ValueError(f'Unknown source: {source_name}')
         handler = self.handlers[source_name]
+        require(handler)  # a missing library gets its own "install ..." message
         if source_name not in self._refreshed:
             # browser sign-ins are re-read once per run, so the browser's
             # current cookies are used without exporting anything again

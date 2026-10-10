@@ -3,6 +3,7 @@
     multidownloader-signin status
     multidownloader-signin import instagram --browser firefox [--profile NAME]
     multidownloader-signin import x --cookies cookies.txt
+    multidownloader-signin import instagram --password   (last resort, asks in the terminal)
     multidownloader-signin remove facebook
     multidownloader-signin remove --all
 
@@ -80,6 +81,15 @@ def cmd_import(args) -> int:
             result = signins.import_cookies_file(platform, args.cookies, terms_version=terms, label=args.label)
             print(result.message(), file=sys.stderr)
             print('You can delete the original file now. It contains sign-ins for every site.', file=sys.stderr)
+        elif args.password:
+            if platform.key != 'instagram':
+                return _fail('Password sign-in is only for Instagram. Use --browser or --cookies.', 2)
+            from .auth import TerminalAuth
+            from .sources.instagram import InstagramHandler
+            auth = TerminalAuth()
+            if not auth._interactive():
+                return _fail('--password asks in the terminal, so it needs one. Use --browser or --cookies.', 2)
+            InstagramHandler().password_signin(auth, terms)
         else:
             profile = None
             if args.browser == 'firefox' and args.profile:
@@ -132,6 +142,8 @@ def build_parser() -> argparse.ArgumentParser:
     source = imp.add_mutually_exclusive_group(required=True)
     source.add_argument('--browser', choices=[key for key, _name in signins.BROWSERS])
     source.add_argument('--cookies', metavar='FILE', help='a cookies.txt export')
+    source.add_argument('--password', action='store_true',
+                        help='Instagram only, last resort: sign in with username and password in the terminal')
     imp.add_argument('--profile', help='Firefox profile name (default: the one with a sign-in)')
     imp.add_argument('--label', help='a name for this sign-in, e.g. "Archive account"')
     imp.add_argument('--accept-terms', action='store_true',
