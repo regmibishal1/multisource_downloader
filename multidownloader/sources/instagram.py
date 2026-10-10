@@ -67,7 +67,9 @@ if INSTALOADER_AVAILABLE:
 def tune(loader, cancel_event=None, logger=None) -> None:
     """Per download: the app's rate controller, and Instaloader's messages in the app's log."""
     log = logger or logging.getLogger(__name__)
-    context = loader.context
+    context = getattr(loader, 'context', None)
+    if not hasattr(context, '_rate_controller'):
+        return  # not Instaloader's own context (a stand-in): nothing to tune
     context._rate_controller = AppRateController(context, cancel_event, log)
     context.error = lambda msg, repeat_at_end=True: log.warning('Instaloader: %s', msg)
     context.quiet = True  # its progress lines would go to a console the window does not have
