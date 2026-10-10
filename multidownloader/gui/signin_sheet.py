@@ -677,8 +677,8 @@ DRIVE_STEPS = (
     ('Add your own Google account as a test user.', 'https://console.cloud.google.com/auth/audience'),
     ('Create an OAuth client of type "Desktop app" and download its JSON file.',
      'https://console.cloud.google.com/auth/clients'),
-    ('Choose the downloaded file below, then select Connect. Your browser opens for Google to ask for consent.',
-     None),
+    ('Choose the downloaded file below, then select Connect. Your browser opens for Google to ask for consent: '
+     'the app asks only to see and download your Drive files, never to change them.', None),
 )
 DRIVE_TESTING_WARNING = ('Google signs you out every 7 days while your project is in Testing status. '
                          'To avoid that, publish the app in your Google Cloud project.')

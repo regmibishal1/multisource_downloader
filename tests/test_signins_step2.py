@@ -289,24 +289,23 @@ class DriveDownloadTests(TempStore):
 
     def test_downloads_never_open_the_browser(self):
         gdrive.client_secrets_path().write_text('{"installed": {}}', encoding='utf-8')
-        fake_auth = mock.Mock()
-        fake_auth.return_value.credentials = None
-        with mock.patch.object(gdrive, 'PYDRIVE2_AVAILABLE', True), mock.patch.object(gdrive, 'GoogleAuth', fake_auth), \
+        flow = mock.Mock()
+        with mock.patch.object(gdrive, 'OAUTH_AVAILABLE', True), mock.patch.object(gdrive, 'InstalledAppFlow', flow), \
                 mock.patch.object(gdrive, 'LEGACY_CLIENT_SECRETS', self.tmp / 'none.json'):
             with self.assertRaises(RuntimeError) as ctx:
                 self.handler()._get_drive_client()
         self.assertEqual(gdrive.NOT_CONNECTED_MESSAGE, str(ctx.exception))
-        fake_auth.return_value.LocalWebserverAuth.assert_not_called()
+        flow.from_client_secrets_file.assert_not_called()
 
     def test_expired_testing_token(self):
         signins.save_oauth_signin(DRIVE)
         gdrive.client_secrets_path().write_text('{"installed": {}}', encoding='utf-8')
         gdrive.credentials_path().write_text('{}', encoding='utf-8')
-        fake_auth = mock.Mock()
-        fake_auth.return_value.credentials = object()
-        fake_auth.return_value.access_token_expired = True
-        fake_auth.return_value.Refresh.side_effect = RuntimeError("invalid_grant: Token has been expired or revoked.")
-        with mock.patch.object(gdrive, 'PYDRIVE2_AVAILABLE', True), mock.patch.object(gdrive, 'GoogleAuth', fake_auth):
+        creds = mock.Mock(valid=False)
+        creds.refresh.side_effect = RuntimeError("invalid_grant: Token has been expired or revoked.")
+        with mock.patch.object(gdrive, 'OAUTH_AVAILABLE', True), \
+                mock.patch.object(gdrive, 'load_credentials', return_value=creds), \
+                mock.patch.object(gdrive, 'Request', mock.Mock()):
             with self.assertRaises(RuntimeError) as ctx:
                 self.handler()._get_drive_client()
         self.assertEqual(gdrive.OAUTH_EXPIRED_MESSAGE, str(ctx.exception))

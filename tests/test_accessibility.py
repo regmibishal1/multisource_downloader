@@ -10,10 +10,8 @@ from unittest import mock
 from multidownloader import settings
 from multidownloader.gui import help as help_menu, signin_window
 
-from gui_gate import HAVE_DISPLAY, REASON as GUI_REASON
+from gui_gate import HAVE_DISPLAY, REASON as GUI_REASON, hidden_root
 
-if HAVE_DISPLAY:
-    import tkinter as tk
 
 ROOT = Path(__file__).resolve().parents[1]
 GUI = ROOT / 'multidownloader' / 'gui'
@@ -134,9 +132,7 @@ class AccessibilityWindowTests(unittest.TestCase):
     """Hidden windows only: nothing appears or takes the focus."""
 
     def setUp(self):
-        self.root = tk.Tk()
-        self.root.withdraw()
-        self.addCleanup(self.root.destroy)
+        self.root = hidden_root(self)
 
     def test_fit_columns_and_sideways_scroll(self):
         from multidownloader.gui.queue_table import COLUMNS, QueueTable

@@ -7,10 +7,8 @@ from unittest import mock
 
 from multidownloader import settings, updates
 
-from gui_gate import HAVE_DISPLAY, REASON as GUI_REASON
+from gui_gate import HAVE_DISPLAY, REASON as GUI_REASON, hidden_root
 
-if HAVE_DISPLAY:
-    import tkinter as tk
 
 DAY = 24 * 3600
 NOW = dt.datetime(2026, 10, 9, 12, 0).timestamp()
@@ -110,9 +108,7 @@ class UpdateBarTests(unittest.TestCase):
     """Hidden root window only: nothing appears or takes the focus."""
 
     def setUp(self):
-        self.root = tk.Tk()
-        self.root.withdraw()
-        self.addCleanup(self.root.destroy)
+        self.root = hidden_root(self)
         import multisource_downloader_ui as ui
         self.ui = ui
         with mock.patch.object(ui.signins, 'summary', return_value=''):

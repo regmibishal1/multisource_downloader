@@ -32,7 +32,9 @@ OPTIONAL = {
     'instaloader': ['--collect-submodules=instaloader', '--copy-metadata=instaloader'],
     # gdown reads its own version from the package metadata when imported
     'gdown': ['--collect-submodules=gdown', '--copy-metadata=gdown'],
-    'pydrive2': ['--collect-submodules=pydrive2', '--copy-metadata=PyDrive2'],
+    # Drive with the user's own Google Cloud OAuth client: Google's own sign-in libraries
+    'google_auth_oauthlib': ['--collect-submodules=google_auth_oauthlib', '--copy-metadata=google-auth-oauthlib',
+                             '--collect-submodules=google.auth', '--copy-metadata=google-auth'],
     # "Sign in here": pywebview with its WebView2 files, and pythonnet on Windows
     'webview': ['--collect-all=webview', '--copy-metadata=pywebview'],
     'pythonnet': ['--collect-all=pythonnet', '--collect-all=clr_loader'],

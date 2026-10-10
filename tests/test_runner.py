@@ -9,10 +9,8 @@ from multidownloader import errors, runs
 from multidownloader.runner import HostWaiting, Job, JobFinished, JobProgress, JobStarted, RunFinished, Runner
 from multidownloader.runs import Run
 
-from gui_gate import HAVE_DISPLAY, REASON as GUI_REASON
+from gui_gate import HAVE_DISPLAY, REASON as GUI_REASON, hidden_root
 
-if HAVE_DISPLAY:
-    import tkinter as tk
 
 
 class TimedDownloader:
@@ -73,7 +71,7 @@ class RunnerTests(unittest.TestCase):
         urls = [f'https://x.com/a/status/{i}' for i in range(3)] + \
                [f'https://www.instagram.com/p/C{i}/' for i in range(3)] + \
                [f'https://www.youtube.com/watch?v=v{i:010d}' for i in range(3)]
-        fake = TimedDownloader(0.15)
+        fake = TimedDownloader(0.3)  # long enough to overlap on a slow CI machine
         started = time.monotonic()
         results = self.runner(fake, max_parallel=3).run(self.jobs(urls))
         elapsed = time.monotonic() - started
@@ -86,13 +84,13 @@ class RunnerTests(unittest.TestCase):
         serial_run = Run(Path(self.run.root.parent) / 'serial')
         self.addCleanup(serial_run.finish)
         started = time.monotonic()
-        Runner(serial_run, TimedDownloader(0.15), max_parallel=1, delays={}, default_delay=(0, 0)).run(
+        Runner(serial_run, TimedDownloader(0.3), max_parallel=1, delays={}, default_delay=(0, 0)).run(
             self.jobs(urls))
         serial = time.monotonic() - started
         self.assertLess(elapsed, serial * 0.75, (elapsed, serial))
 
     def test_instagram_is_always_one_at_a_time(self):
-        fake = TimedDownloader(0.1)
+        fake = TimedDownloader(0.4)  # long enough for the x.com links to overlap on a slow CI machine
         self.runner(fake, max_parallel=4, per_host=3).run(
             self.jobs([f'https://www.instagram.com/p/C{i}/' for i in range(3)] +
                       [f'https://x.com/a/status/{i}' for i in range(3)]))
@@ -200,9 +198,7 @@ class ProgressHookTests(unittest.TestCase):
 @unittest.skipUnless(HAVE_DISPLAY, GUI_REASON)
 class WindowProgressTests(unittest.TestCase):
     def setUp(self):
-        self.root = tk.Tk()
-        self.root.withdraw()
-        self.addCleanup(self.root.destroy)
+        self.root = hidden_root(self)
         import multisource_downloader_ui as ui
         with mock.patch.object(ui.signins, 'summary', return_value=''):
             self.app = ui.DownloaderUI(self.root, offer_resume=False)

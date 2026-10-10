@@ -2,11 +2,14 @@
 
 Public links download with gdown and need nothing. When Drive refuses a
 link, the stored sign-in is used: Google cookies (from Firefox or a cookies
-file, passed to gdown) or the user's own Google Cloud OAuth client (PyDrive2).
+file, passed to gdown) or the user's own Google Cloud OAuth client, through
+Google's own libraries (google-auth, google-auth-oauthlib) and the Drive v3
+REST API.
 """
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import inspect
 import json
 import logging
@@ -15,7 +18,7 @@ import re
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Iterator, Optional
 
 try:
     import gdown
@@ -25,13 +28,14 @@ except Exception:  # pragma: no cover - optional dependency
     GDOWN_AVAILABLE = False
 
 try:
-    from pydrive2.auth import GoogleAuth
-    from pydrive2.drive import GoogleDrive
-    PYDRIVE2_AVAILABLE = True
+    from google.auth.exceptions import RefreshError
+    from google.auth.transport.requests import AuthorizedSession, Request
+    from google.oauth2.credentials import Credentials
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    OAUTH_AVAILABLE = True
 except Exception:  # pragma: no cover - optional dependency
-    GoogleAuth = None
-    GoogleDrive = None
-    PYDRIVE2_AVAILABLE = False
+    RefreshError = AuthorizedSession = Request = Credentials = InstalledAppFlow = None
+    OAUTH_AVAILABLE = False
 
 from .. import session_store, signins
 from ..paths import path_inside
@@ -44,6 +48,14 @@ CLIENT_SECRET_FILENAME = 'client_secrets.json'
 # Older versions also looked for client_secrets.json in the project root.
 LEGACY_CLIENT_SECRETS = Path(__file__).resolve().parents[2] / CLIENT_SECRET_FILENAME
 FOLDER_MIME = 'application/vnd.google-apps.folder'
+# read-only: the app only downloads. Connections made by older versions (full Drive scope) keep working.
+SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
+TOKEN_URI = 'https://oauth2.googleapis.com/token'
+API = 'https://www.googleapis.com/drive/v3/files'
+FIELDS = 'id,name,mimeType,modifiedTime,createdTime,md5Checksum,size,owners(displayName)'
+CONSENT_TIMEOUT_S = 600  # the same 10 minutes as every other sign-in window (brief A15)
+CHUNK = 1024 * 1024
+OAUTH_MISSING = 'Google Drive sign-in needs the drive extra: pip install ".[drive]"'
 
 PRIVATE_MESSAGE = ("This file is private. Ask the owner to set sharing to 'Anyone with the link', "
                    'or sign in with a Google account that has access.')
@@ -148,8 +160,8 @@ class GoogleDriveHandler:
     name = 'gdown'
 
     def available(self):
-        # gdown covers public links; PyDrive2 is only needed for the OAuth route
-        return (True, '') if GDOWN_AVAILABLE or PYDRIVE2_AVAILABLE else (False, GDOWN_MISSING)
+        # gdown covers public links; the Google libraries are only needed for the OAuth route
+        return (True, '') if GDOWN_AVAILABLE or OAUTH_AVAILABLE else (False, GDOWN_MISSING)
 
     def __init__(self, logger=None):
         self.logger = logger or logging.getLogger(__name__)
@@ -288,92 +300,85 @@ class GoogleDriveHandler:
             raise RuntimeError('gdown did not download the folder')
         return True
 
-    # --- PyDrive2 (the user's own Google Cloud OAuth client) -----------------
+    # --- the user's own Google Cloud OAuth client, through the Drive v3 API ----------
     def _download_authenticated_file(self, file_id: str, out_dir: str):
         drive = self._get_drive_client()
-        file_obj = drive.CreateFile({'id': file_id})
-        file_obj.FetchMetadata()
-        if file_obj.get('mimeType') == FOLDER_MIME:
+        meta = drive.metadata(file_id)
+        if meta.get('mimeType') == FOLDER_MIME:
             return self._download_authenticated_folder(file_id, out_dir, drive=drive)
-        return self._save_drive_file(file_obj, out_dir)
+        return self._save_drive_file(drive, meta, out_dir)
 
-    def _save_drive_file(self, file_obj, out_dir):
-        file_id = file_obj.get('id') or 'file'
-        name = file_obj.get('title') or file_obj.get('originalFilename') or file_id
-        # Drive titles can contain "/" or "../"; never trust them as a path.
+    def _save_drive_file(self, drive, meta, out_dir):
+        file_id = meta.get('id') or 'file'
+        name = meta.get('name') or file_id
+        # Drive names can contain "/" or "../"; never trust them as a path.
         target_path = str(path_inside(out_dir, name, fallback=file_id))
         details = {
-            'id': file_id, 'name': name, 'mime_type': file_obj.get('mimeType'),
-            'modified': file_obj.get('modifiedDate'), 'created': file_obj.get('createdDate'),
-            'owners': [o.get('displayName') for o in (file_obj.get('owners') or []) if o.get('displayName')],
-            'md5': file_obj.get('md5Checksum'), 'downloaded_with': 'pydrive2',
+            'id': file_id, 'name': name, 'mime_type': meta.get('mimeType'),
+            'modified': meta.get('modifiedTime'), 'created': meta.get('createdTime'),
+            'owners': [o.get('displayName') for o in (meta.get('owners') or []) if o.get('displayName')],
+            'md5': meta.get('md5Checksum'), 'downloaded_with': 'google-auth (Drive API v3)',
         }
         attempts = 2
         for attempt in range(1, attempts + 1):
             try:
-                file_obj.GetContentFile(target_path)
+                drive.download(file_id, target_path, md5=meta.get('md5Checksum'))
                 self.logger.info('Downloaded (authenticated) %s', target_path)
                 _write_drive_json(target_path, details)
                 return target_path
+            except DriveRefused:
+                raise
             except Exception as exc:  # pragma: no cover - network call
                 self.logger.warning('Attempt %s failed for %s: %s', attempt, file_id, exc)
                 if attempt == attempts:
-                    raise RuntimeError(f'Authenticated download failed: {exc}')
+                    raise RuntimeError(f'Authenticated download failed: {exc}') from exc
         return None
 
     def _download_authenticated_folder(self, folder_id: str, out_dir: str, drive=None):
         drive = drive or self._get_drive_client()
         saved = 0
-        query = f"'{folder_id}' in parents and trashed=false"
-        for item in drive.ListFile({'q': query}).GetList():
+        for item in drive.children(folder_id):
             mime = item.get('mimeType') or ''
             if mime == FOLDER_MIME:
-                sub = path_inside(out_dir, item.get('title') or item['id'], fallback=item['id'])
+                sub = path_inside(out_dir, item.get('name') or item['id'], fallback=item['id'])
                 os.makedirs(sub, exist_ok=True)
                 saved += self._download_authenticated_folder(item['id'], str(sub), drive=drive)
             elif mime.startswith('application/vnd.google-apps.'):
                 # Docs, Sheets and Slides have no file to download as-is
                 self.logger.warning('Skipping Google %s "%s": export it from Drive instead',
-                                    mime.rsplit('.', 1)[-1], item.get('title'))
+                                    mime.rsplit('.', 1)[-1], item.get('name'))
             else:
-                self._save_drive_file(item, out_dir)
+                self._save_drive_file(drive, item, out_dir)
                 saved += 1
         return saved
 
     def _get_drive_client(self, interactive: bool = False):
-        """Return a GoogleDrive client from the saved OAuth connection.
+        """Return a DriveApi from the saved OAuth connection.
 
         interactive=True (the Sign-ins wizard only) opens the system browser
         when there is no connection; a download never does.
         """
-        if not PYDRIVE2_AVAILABLE:
-            raise RuntimeError('Google Drive sign-in needs the drive extra: pip install ".[drive]"')
+        if not OAUTH_AVAILABLE:
+            raise RuntimeError(OAUTH_MISSING)
         client_secrets = _find_client_secrets()
         if not client_secrets:
             raise RuntimeError(NOT_CONNECTED_MESSAGE)
 
-        gauth = GoogleAuth()
-        try:
-            gauth.LoadClientConfigFile(str(client_secrets))
-        except Exception as exc:
-            raise RuntimeError(f'Failed to load Google Drive client_secrets.json: {exc}') from exc
-
-        creds = credentials_path()
-        if creds.exists():
+        creds_file = credentials_path()
+        creds = None
+        if creds_file.exists():
             try:
-                gauth.LoadCredentialsFile(str(creds))
-            except Exception as exc:  # pragma: no cover - corrupted file
-                self.logger.warning('Failed to load saved Google Drive credentials: %s', exc)
+                creds = load_credentials(creds_file)
+            except Exception as exc:  # a damaged file: connect again
+                self.logger.warning('Could not read the saved Google Drive connection: %s', exc)
 
-        if getattr(gauth, 'credentials', None):
+        if creds is not None:
             try:
-                if gauth.access_token_expired:
-                    gauth.Refresh()
-                    gauth.SaveCredentialsFile(str(creds))
+                if not creds.valid:
+                    creds.refresh(Request())
+                    save_credentials(creds, creds_file)
                     self.logger.info('Refreshed Google Drive token')
-                else:
-                    gauth.Authorize()
-                return GoogleDrive(gauth)
+                return DriveApi(AuthorizedSession(creds))
             except Exception as exc:
                 if 'invalid_grant' in str(exc):
                     signins.mark_rejected(BY_KEY['gdrive'])
@@ -384,9 +389,13 @@ class GoogleDriveHandler:
         if not interactive:
             raise RuntimeError(NOT_CONNECTED_MESSAGE)
         self.logger.info('Opening the browser for Google Drive consent')
-        gauth.LocalWebserverAuth()  # system browser, as Google requires
-        gauth.SaveCredentialsFile(str(creds))
-        return GoogleDrive(gauth)
+        flow = InstalledAppFlow.from_client_secrets_file(str(client_secrets), SCOPES)
+        # Google's consent page in the user's own browser, as Google requires; a local
+        # address on this computer receives the answer
+        creds = flow.run_local_server(port=0, open_browser=True, timeout_seconds=CONSENT_TIMEOUT_S,
+                                      success_message='Google Drive is connected. You can close this tab.')
+        save_credentials(creds, creds_file)
+        return DriveApi(AuthorizedSession(creds))
 
     def connect_oauth(self, client_file) -> None:
         """Wizard step: store the user's OAuth client and run Google's consent in the browser."""
@@ -402,5 +411,84 @@ class GoogleDriveHandler:
         signins.save_oauth_signin(BY_KEY['gdrive'])
 
 
-__all__ = ['GoogleDriveHandler', 'parse_drive_id', 'oauth_connected', 'validate_client_secrets',
-           'PRIVATE_MESSAGE', 'OAUTH_EXPIRED_MESSAGE']
+class DriveRefused(RuntimeError):
+    """Drive answered with an error status; the message says why in plain words."""
+
+
+class DriveApi:
+    """The few Drive v3 REST calls the app needs, over an authorized requests session."""
+
+    def __init__(self, session):
+        self.session = session
+
+    def _check(self, response):
+        if response.status_code < 400:
+            return response
+        try:
+            reason = response.json().get('error', {}).get('message') or response.reason
+        except ValueError:
+            reason = response.reason
+        if response.status_code in (403, 404):
+            raise DriveRefused(f'{NO_ACCESS_MESSAGE} (Drive said: {reason})')
+        if response.status_code == 401:
+            raise DriveRefused(f'Google Drive did not accept the connection (401): {reason}')
+        raise DriveRefused(f'Google Drive error {response.status_code}: {reason}')
+
+    def metadata(self, file_id: str) -> Dict:
+        response = self.session.get(f'{API}/{file_id}', params={'fields': FIELDS, 'supportsAllDrives': 'true'},
+                                    timeout=60)
+        return self._check(response).json()
+
+    def children(self, folder_id: str) -> Iterator[Dict]:
+        params = {'q': f"'{folder_id}' in parents and trashed=false", 'fields': f'nextPageToken,files({FIELDS})',
+                  'pageSize': 1000, 'supportsAllDrives': 'true', 'includeItemsFromAllDrives': 'true'}
+        while True:
+            data = self._check(self.session.get(API, params=params, timeout=60)).json()
+            yield from data.get('files') or []
+            token = data.get('nextPageToken')
+            if not token:
+                return
+            params = dict(params, pageToken=token)
+
+    def download(self, file_id: str, target: str, md5: Optional[str] = None) -> None:
+        """Stream the file to target (via a .partial name) and check Drive's MD5 when it gives one."""
+        partial = target + '.partial'
+        digest = hashlib.md5()  # noqa: S324 (Drive publishes MD5; it is a transfer check here, not security)
+        try:
+            with self.session.get(f'{API}/{file_id}', params={'alt': 'media', 'supportsAllDrives': 'true'},
+                                  stream=True, timeout=60) as response:
+                self._check(response)
+                with open(partial, 'wb') as fp:
+                    for chunk in response.iter_content(CHUNK):
+                        fp.write(chunk)
+                        digest.update(chunk)
+            if md5 and digest.hexdigest() != md5.lower():
+                raise RuntimeError('the downloaded file does not match the MD5 Google Drive gave for it')
+            os.replace(partial, target)
+        finally:
+            with contextlib.suppress(OSError):
+                os.unlink(partial)
+
+
+def load_credentials(path: Path):
+    """The saved connection: google-auth's format, or oauth2client's, which older versions wrote."""
+    data = json.loads(Path(path).read_text(encoding='utf-8'))
+    if not data.get('refresh_token') or not data.get('client_id'):
+        raise ValueError('no refresh token in the saved connection')
+    return Credentials(
+        token=data.get('token') or data.get('access_token'),
+        refresh_token=data['refresh_token'],
+        token_uri=data.get('token_uri') or TOKEN_URI,
+        client_id=data['client_id'],
+        client_secret=data.get('client_secret'),
+        scopes=data.get('scopes') or None,
+    )
+
+
+def save_credentials(creds, path: Path) -> None:
+    session_store._atomic_write(Path(path), creds.to_json().encode('utf-8'))  # readable only by this user
+
+
+__all__ = ['DriveApi', 'DriveRefused', 'GoogleDriveHandler', 'load_credentials', 'oauth_connected',
+           'parse_drive_id', 'save_credentials', 'validate_client_secrets', 'PRIVATE_MESSAGE',
+           'OAUTH_EXPIRED_MESSAGE']

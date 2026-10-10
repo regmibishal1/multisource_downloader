@@ -7,10 +7,8 @@ from unittest import mock
 from multidownloader import session_store, signins
 from multidownloader.platforms import BY_KEY
 
-from gui_gate import HAVE_DISPLAY, REASON as GUI_REASON
+from gui_gate import HAVE_DISPLAY, REASON as GUI_REASON, hidden_root
 
-if HAVE_DISPLAY:
-    import tkinter as tk
 
 
 def texts(widget):
@@ -41,9 +39,7 @@ class SignInWindowTests(unittest.TestCase):
         profiles = mock.patch.object(signins, 'firefox_profiles', return_value=[])
         profiles.start()
         self.addCleanup(profiles.stop)
-        self.root = tk.Tk()
-        self.root.withdraw()
-        self.addCleanup(self.root.destroy)
+        self.root = hidden_root(self)
 
     def pump(self, widget, seconds=0.5):
         end = time.time() + seconds

@@ -118,14 +118,11 @@ class DriveDownloadTests(TempSessionRoot):
         out_dir = self.tmp / 'out'
         out_dir.mkdir()
         written = []
-        file_obj = mock.MagicMock()
-        file_obj.get.side_effect = lambda key: '../../evil.txt' if key == 'title' else None
-        file_obj.GetContentFile.side_effect = written.append
         drive = mock.Mock()
-        drive.CreateFile.return_value = file_obj
+        drive.metadata.return_value = {'id': 'F1', 'name': '../../evil.txt', 'mimeType': 'text/plain'}
+        drive.download.side_effect = lambda file_id, target, md5=None: written.append(target)
         handler = GoogleDriveHandler()
-        with mock.patch.object(gdrive, 'PYDRIVE2_AVAILABLE', True), \
-                mock.patch.object(handler, '_get_drive_client', return_value=drive):
+        with mock.patch.object(handler, '_get_drive_client', return_value=drive):
             handler.download('https://drive.google.com/file/d/F1/view', str(out_dir), {'method': 'authenticated'})
         self.assertEqual(1, len(written))
         self.assertEqual((out_dir / 'gdrive' / 'F1').resolve(), Path(written[0]).parent)

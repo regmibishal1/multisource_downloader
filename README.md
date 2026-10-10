@@ -105,7 +105,7 @@ What each run saves
 - To check later that nothing changed, run `msdl verify <download folder>\_runs\<run id>` (or a package folder): it re-hashes every file and says "All 214 files match." or lists the changed and missing ones (exit code 0 or 1). `--custody` also checks the custody log against its anchors. `sha256sum -c _runs/<run id>/SHA256SUMS.txt` from the download folder works too.
 - Links saved in earlier runs, even shared in another format, are recorded as "already saved". The list is `history.sqlite` in your user data folder.
 
-Supported platforms and what downloads them: YouTube, X, TikTok, Threads, Reddit and Facebook with yt-dlp; Instagram with Instaloader; Google Drive with gdown and PyDrive2; Bluesky and image posts (photo-only X posts, Reddit, TikTok and Facebook photo posts) with gallery-dl. Image-only Threads posts are not supported yet.
+Supported platforms and what downloads them: YouTube, X, TikTok, Threads, Reddit and Facebook with yt-dlp; Instagram with Instaloader; Google Drive with gdown and, for your own Google Cloud connection, Google's own libraries (google-auth); Bluesky and image posts (photo-only X posts, Reddit, TikTok and Facebook photo posts) with gallery-dl. Image-only Threads posts are not supported yet.
 
 Troubleshooting
 ---------------

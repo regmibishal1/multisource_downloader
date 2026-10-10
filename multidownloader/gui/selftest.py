@@ -53,7 +53,7 @@ def _isolate(tmp: Path) -> Callable[[], None]:
     return restore
 
 
-OPTIONAL = (('instaloader', 'Instaloader'), ('gdown', 'gdown'), ('pydrive2', 'PyDrive2'), ('webview', 'pywebview'))
+OPTIONAL = (('instaloader', 'Instaloader'), ('gdown', 'gdown'), ('google_auth_oauthlib', 'Google sign-in'), ('webview', 'pywebview'))
 
 
 def expected_components() -> List[str]:

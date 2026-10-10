@@ -9,10 +9,8 @@ from multidownloader import batch, custody, runs, settings, verify
 from multidownloader.runner import Job, Runner
 from multidownloader.runs import Run
 
-from gui_gate import HAVE_DISPLAY, REASON as GUI_REASON
+from gui_gate import HAVE_DISPLAY, REASON as GUI_REASON, hidden_root
 
-if HAVE_DISPLAY:
-    import tkinter as tk
 
 
 class FakeDownloader:
@@ -100,9 +98,7 @@ class NotesWindowTests(unittest.TestCase):
     """Hidden root window only: nothing appears or takes the focus."""
 
     def setUp(self):
-        self.root = tk.Tk()
-        self.root.withdraw()
-        self.addCleanup(self.root.destroy)
+        self.root = hidden_root(self)
         import multisource_downloader_ui as ui
         self.ui = ui
         with mock.patch.object(ui.signins, 'summary', return_value=''):
