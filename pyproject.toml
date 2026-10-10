@@ -25,6 +25,7 @@ dev = ["ruff>=0.6"]
 
 [project.scripts]
 multidownloader-batch = "multidownloader.batch:main"
+multidownloader-signin = "multidownloader.signin_cli:main"
 
 [project.gui-scripts]
 multisource-downloader = "multisource_downloader_ui:main"

@@ -6,14 +6,16 @@ Supports Google Drive, Instagram, TikTok, Threads, Twitter/X, Reddit, Facebook, 
 
 import logging
 import os
-import shutil
 import threading
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
+from multidownloader import detect, signins
 from multidownloader.core import Downloader
-from multidownloader import detect, session_store
+from multidownloader.gui.signin_sheet import SignInSheet, SignInsWindow
+from multidownloader.gui.theme import COLORS
+from multidownloader.platforms import BY_HANDLER
 
 SOURCE_CHOICES = [
     'Google Drive',
@@ -26,17 +28,12 @@ SOURCE_CHOICES = [
     'YouTube',
 ]
 
-INSTAGRAM_AUTH_CHOICES = [
-    'Auto (reuse saved session if available)',
-    'Authenticated (prompt now)',
-    'Unauthenticated only',
-]
-
 # Shown in the folder field from the start so files never land in whatever
 # directory the script happened to be started from.
 DEFAULT_OUTPUT_DIR = str(Path.home() / 'Downloads' / 'Multisource')
 
 COOKIE_SOURCES = {'TikTok', 'Threads', 'Twitter', 'Reddit', 'Facebook', 'YouTube'}
+MAX_LISTED_ERRORS = 10
 
 
 class DownloaderUI:
@@ -47,29 +44,38 @@ class DownloaderUI:
         self.urls_var = tk.StringVar()
         self.dir_var = tk.StringVar(value=DEFAULT_OUTPUT_DIR)
         self.status_var = tk.StringVar()
+        self.notice_var = tk.StringVar()
+        self.signin_summary_var = tk.StringVar()
         self.source_var = tk.StringVar(value=SOURCE_CHOICES[0])
         self.method_var = tk.StringVar(value='Public (gdown)')
-        self.insta_method_var = tk.StringVar(value=INSTAGRAM_AUTH_CHOICES[0])
 
         self.frm = ttk.Frame(self.root, padding=20)
         self.frm.pack(fill=tk.BOTH, expand=True)
-
-        ttk.Label(self.frm, text='Links (paste them, or any text that contains them):', font=('Segoe UI', 10, 'bold')).grid(
-            row=0, column=0, columnspan=2, sticky='w', pady=(0, 5)
-        )
-        self.url_entry = ttk.Entry(self.frm, textvariable=self.urls_var, width=60)
-        self.url_entry.grid(row=1, column=0, columnspan=2, sticky='ew', pady=(0, 10))
         self.frm.columnconfigure(0, weight=1)
         self.frm.columnconfigure(1, weight=1)
 
-        self.dir_btn = ttk.Button(self.frm, text='Select Download Directory', command=self.select_directory)
-        self.dir_btn.grid(row=2, column=0, sticky='e', pady=(0, 10), padx=(0, 5))
-        self.dir_entry = ttk.Entry(self.frm, textvariable=self.dir_var, state='readonly', width=50)
-        self.dir_entry.grid(row=2, column=1, sticky='w', pady=(0, 10), padx=(0, 5))
+        header = ttk.Frame(self.frm)
+        header.grid(row=0, column=0, columnspan=2, sticky='ew', pady=(0, 10))
+        header.columnconfigure(0, weight=1)
+        self.signin_summary = ttk.Label(header, textvariable=self.signin_summary_var)
+        self.signin_summary.grid(row=0, column=1, sticky='e', padx=(0, 8))
+        self.signins_btn = ttk.Button(header, text='Sign-ins', command=self.open_signins)
+        self.signins_btn.grid(row=0, column=2, sticky='e')
 
-        ttk.Label(self.frm, text='Source:').grid(row=3, column=0, sticky='e', pady=(0, 5), padx=(0, 5))
+        ttk.Label(self.frm, text='Links (paste them, or any text that contains them):', font=('Segoe UI', 10, 'bold')).grid(
+            row=1, column=0, columnspan=2, sticky='w', pady=(0, 5)
+        )
+        self.url_entry = ttk.Entry(self.frm, textvariable=self.urls_var, width=60)
+        self.url_entry.grid(row=2, column=0, columnspan=2, sticky='ew', pady=(0, 10))
+
+        self.dir_btn = ttk.Button(self.frm, text='Select Download Directory', command=self.select_directory)
+        self.dir_btn.grid(row=3, column=0, sticky='e', pady=(0, 10), padx=(0, 5))
+        self.dir_entry = ttk.Entry(self.frm, textvariable=self.dir_var, state='readonly', width=50)
+        self.dir_entry.grid(row=3, column=1, sticky='w', pady=(0, 10), padx=(0, 5))
+
+        ttk.Label(self.frm, text='Source:').grid(row=4, column=0, sticky='e', pady=(0, 5), padx=(0, 5))
         self.src_menu = ttk.Combobox(self.frm, textvariable=self.source_var, values=SOURCE_CHOICES, state='readonly', width=20)
-        self.src_menu.grid(row=3, column=1, sticky='w', pady=(0, 5), padx=(0, 5))
+        self.src_menu.grid(row=4, column=1, sticky='w', pady=(0, 5), padx=(0, 5))
 
         self.drive_method_label = ttk.Label(self.frm, text='Method:')
         self.drive_method = ttk.Combobox(
@@ -79,153 +85,142 @@ class DownloaderUI:
             state='readonly',
             width=22,
         )
-        self.insta_auth_label = ttk.Label(self.frm, text='Auth Type:')
-        self.insta_method = ttk.Combobox(
-            self.frm,
-            textvariable=self.insta_method_var,
-            values=INSTAGRAM_AUTH_CHOICES,
-            state='readonly',
-            width=28,
-        )
-
-        self.cookie_btn = ttk.Button(self.frm, text='Import Cookies...', command=self.import_cookies)
-
-        self.drive_method_label.grid(row=4, column=0, sticky='e', pady=(0, 5), padx=(0, 5))
-        self.drive_method.grid(row=4, column=1, sticky='w', pady=(0, 5), padx=(0, 5))
-        self.insta_auth_label.grid(row=5, column=0, sticky='e', pady=(0, 5), padx=(0, 5))
-        self.insta_method.grid(row=5, column=1, sticky='w', pady=(0, 5), padx=(0, 5))
-        self.cookie_btn.grid(row=6, column=0, columnspan=2, pady=(0, 5))
+        self.drive_method_label.grid(row=5, column=0, sticky='e', pady=(0, 5), padx=(0, 5))
+        self.drive_method.grid(row=5, column=1, sticky='w', pady=(0, 5), padx=(0, 5))
 
         self.source_var.trace_add('write', self._update_controls)
         self._update_controls()
 
         self.download_btn = ttk.Button(self.frm, text='Download', command=self.start_download)
-        self.download_btn.grid(row=7, column=0, columnspan=2, pady=10)
+        self.download_btn.grid(row=6, column=0, columnspan=2, pady=10)
 
-        self.status_label = ttk.Label(self.frm, textvariable=self.status_var, foreground='blue')
-        self.status_label.grid(row=8, column=0, columnspan=2, sticky='w', pady=(0, 5))
+        self.status_label = ttk.Label(self.frm, textvariable=self.status_var, foreground=COLORS['text-2'])
+        self.status_label.grid(row=7, column=0, columnspan=2, sticky='w', pady=(0, 5))
+        self.notice_label = ttk.Label(self.frm, textvariable=self.notice_var, foreground=COLORS['warning'],
+                                      wraplength=520, justify='left')
+        self.notice_label.grid(row=8, column=0, columnspan=2, sticky='w')
+
+        self.refresh_signin_summary()
 
     # ------------------------------------------------------------------
     def _update_controls(self, *args):
-        source = self.source_var.get()
-        if source == 'Google Drive':
+        if self.source_var.get() == 'Google Drive':
             self.drive_method_label.grid()
             self.drive_method.grid()
         else:
             self.drive_method_label.grid_remove()
             self.drive_method.grid_remove()
 
-        if source == 'Instagram':
-            self.insta_auth_label.grid()
-            self.insta_method.grid()
-        else:
-            self.insta_auth_label.grid_remove()
-            self.insta_method.grid_remove()
+    def refresh_signin_summary(self):
+        summary = signins.summary()
+        attention = 'attention' in summary
+        self.signin_summary_var.set(f'! {summary}' if attention else summary)
+        self.signin_summary.configure(foreground=COLORS['warning'] if attention else COLORS['text-2'])
 
-        if source in COOKIE_SOURCES:
-            self.cookie_btn.grid()
-        else:
-            self.cookie_btn.grid_remove()
+    def open_signins(self):
+        window = SignInsWindow(self.root, on_change=self.refresh_signin_summary)
+        self.root.wait_window(window)
+        self.refresh_signin_summary()
+        self.signins_btn.focus_set()
 
     def select_directory(self):
         directory = filedialog.askdirectory()
         if directory:
             self.dir_var.set(directory)
 
-    def import_cookies(self):
-        source = self.source_var.get()
-        if source not in COOKIE_SOURCES:
-            messagebox.showinfo('Cookies', 'This source does not use cookies.', parent=self.root)
-            return
-        path = filedialog.askopenfilename(title='Select cookies.txt file')
-        if not path:
-            return
-        try:
-            dest = session_store.default_cookie_path(source)
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(path, dest)
-            self.status_var.set(f'Imported cookies for {source} into {dest}')
-        except Exception as exc:
-            messagebox.showerror('Cookie Import Failed', str(exc), parent=self.root)
-
-    def start_download(self):
-        # Pull every link out of whatever was pasted (chat exports, reports,
-        # comma or space separated lists) and drop repeats of the same post.
-        urls, duplicates = detect.unique_urls(detect.extract_urls(self.urls_var.get()))
-        if not urls:
-            messagebox.showerror('No links', 'No links found. Paste one or more links.', parent=self.root)
-            logging.warning('No URLs entered for download')
-            return
-        logging.info(detect.summarize(urls, duplicates))
+    def start_download(self, urls=None):
+        if urls is None:
+            # Pull every link out of whatever was pasted (chat exports,
+            # reports, comma or space separated lists) and drop repeats.
+            urls, duplicates = detect.unique_urls(detect.extract_urls(self.urls_var.get()))
+            if not urls:
+                messagebox.showerror('No links', 'No links found. Paste one or more links.', parent=self.root)
+                logging.warning('No URLs entered for download')
+                return
+            logging.info(detect.summarize(urls, duplicates))
 
         out_dir = self.dir_var.get() or DEFAULT_OUTPUT_DIR
         os.makedirs(out_dir, exist_ok=True)
         logging.info('Starting download for URLs: %s -> %s', urls, out_dir)
 
-        downloader = Downloader(out_dir, logger=logging.getLogger('multidownloader'))
+        # Warn, but do not block, when a platform that often needs a sign-in
+        # has none ready.
+        source = self.source_var.get()
+        warnings = signins.preflight_warnings(urls)
+        platform = BY_HANDLER.get(source)
+        if platform and platform.signin_need == 'often' and signins.status(platform).state not in ('ready', 'unknown'):
+            line = f'{platform.name} may refuse some of these links without a sign-in.'
+            if line not in warnings:
+                warnings.append(line)
+        self.notice_var.set('\n'.join(f'! {w} Use Sign-ins to add one.' for w in warnings))
 
-        instaloader_client = None
-        if self.source_var.get() == 'Instagram' and self.insta_method_var.get().startswith('Authenticated'):
-            try:
-                instaloader_client = downloader.authenticate('Instagram', root=self.root)
-            except Exception as exc:
-                logging.error('Authentication call failed: %s', exc)
-                messagebox.showerror('Authentication Error', str(exc), parent=self.root)
-                return
-            if not instaloader_client:
-                logging.warning('Instagram authenticated client not acquired; aborting download')
-                return
+        downloader = Downloader(out_dir, logger=logging.getLogger('multidownloader'))
 
         # Capture the selections now: the worker thread must not read Tk
         # variables, and changing the dropdowns mid-run must not reroute the
         # remaining URLs to a different handler.
-        source = self.source_var.get()
         drive_method = self.method_var.get()
-        insta_mode = self.insta_method_var.get()
 
         self.download_btn.state(['disabled'])
         threading.Thread(
             target=self._download_with_core,
-            args=(downloader, urls, source, drive_method, insta_mode, instaloader_client),
+            args=(downloader, urls, source, drive_method),
             daemon=True,
         ).start()
 
-    def _download_with_core(self, downloader, urls, source, drive_method, insta_mode, instaloader_client=None):
+    def _download_with_core(self, downloader, urls, source, drive_method):
         errors = []
-        for url in urls:
+        for i, url in enumerate(urls, 1):
             opts = {}
 
             if source == 'Google Drive':
                 opts['method'] = 'public' if drive_method.startswith('Public') else 'authenticated'
-
             if source == 'Instagram':
-                if insta_mode.startswith('Authenticated'):
-                    opts['auth'] = 'authenticated'
-                    if instaloader_client:
-                        opts['instaloader_client'] = instaloader_client
-                elif insta_mode.startswith('Auto'):
-                    opts['auth'] = 'auto'
-                else:
-                    opts['auth'] = 'unauthenticated'
-
+                opts['auth'] = 'auto'
             if source in COOKIE_SOURCES:
                 opts['use_session'] = True
 
-            self.root.after(0, self.status_var.set, f'Processing: {url}')
+            self.root.after(0, self.status_var.set, f'Saving {i} of {len(urls)}: {url}')
             logging.info('Delegating download to core: %s %s %s', source, url, opts)
             try:
                 downloader.download(source, url, opts)
                 logging.info('Download finished for %s', url)
             except Exception as exc:
-                errors.append((url, exc))
+                errors.append((url, str(exc)))
                 logging.error('Core download error for %s: %s', url, exc)
-                self.root.after(0, lambda err=exc: messagebox.showerror('Download Error', str(err), parent=self.root))
 
-        if errors:
-            self.root.after(0, self.status_var.set, f'Completed with {len(errors)} error(s)')
-        else:
-            self.root.after(0, self.status_var.set, 'All downloads completed successfully')
-        self.root.after(0, self.download_btn.state, ['!disabled'])
+        self.root.after(0, self._run_finished, source, urls, errors)
+
+    def _run_finished(self, source, urls, errors):
+        """One summary for the whole run instead of a popup per failed link."""
+        self.download_btn.state(['!disabled'])
+        self.refresh_signin_summary()
+        saved = len(urls) - len(errors)
+        if not errors:
+            self.status_var.set(f'Done. {saved} saved.')
+            self.root.title('Multi-Source Downloader')
+            return
+        self.status_var.set(f'Done. {saved} saved, {len(errors)} failed.')
+        self.root.title(f'Done: {saved} saved, {len(errors)} failed - Multi-Source Downloader')
+
+        platform = BY_HANDLER.get(source)
+        auth_failed = [url for url, msg in errors if signins.looks_like_auth_error(msg)]
+        if platform and platform.cookie_domains and auth_failed:
+            noun = 'link needs' if len(auth_failed) == 1 else 'links need'
+            reason = f'{len(auth_failed)} {noun} a {platform.name} sign-in.'
+            if messagebox.askyesno('Sign-in needed', f'{reason} Sign in now?', parent=self.root):
+                sheet = SignInSheet(self.root, platform, reason=reason, retry_count=len(auth_failed),
+                                    on_retry=lambda: self.start_download(auth_failed),
+                                    on_change=self.refresh_signin_summary)
+                self.root.wait_window(sheet)
+                self.refresh_signin_summary()
+                return
+
+        listed = '\n\n'.join(f'{url}\n{msg}' for url, msg in errors[:MAX_LISTED_ERRORS])
+        more = len(errors) - MAX_LISTED_ERRORS
+        if more > 0:
+            listed += f'\n\n...and {more} more. Details are in downloader.log.'
+        messagebox.showerror('Some downloads failed', listed, parent=self.root)
 
 
 def _setup_logging():

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from . import detect, platforms
+from . import detect, platforms, signins
 from .core import Downloader
 
 SUPPORTED_SOURCES = {p.handler for p in platforms.PLATFORMS}
@@ -188,6 +188,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     manifest = load_manifest(args.input, fmt=args.format)
     unique, duplicates = detect.unique_urls(item.url for item in manifest)
     logger.info(detect.summarize(unique, duplicates))
+    # informational only: the run goes ahead without a sign-in
+    for platform in signins.platforms_missing_signin(unique):
+        logger.warning('No %s sign-in, so some links may fail. Run: multidownloader-signin import %s --browser firefox',
+                       platform.name, platform.key)
     result = execute_batch(
         manifest,
         args.out_dir,

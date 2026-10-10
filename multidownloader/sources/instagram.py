@@ -16,7 +16,12 @@ except Exception:  # pragma: no cover - instaloader optional
     Post = None
     INSTALOADER_AVAILABLE = False
 
-from .. import session_store
+from .. import session_store, signins
+from ..platforms import BY_KEY
+from ..signins import SignInError
+
+CHECKPOINT_MESSAGE = ('Instagram wants you to confirm this sign-in. '
+                      'Open Instagram in your browser, approve it, then try again.')
 
 # Matches /p/, /reel/, /reels/ and /tv/ links, with or without a leading
 # /<username>/ segment (a common share format).
@@ -34,127 +39,77 @@ class InstagramHandler:
 
     def __init__(self, logger=None):
         self.logger = logger or logging.getLogger(__name__)
+        self._signin_loader = None
         session_store.ensure_session_dir(self.SESSION_SOURCE)
 
     # ------------------------------------------------------------------
-    # Interactive authentication helpers
+    # Password sign-in (last resort; see signins.py for the other methods)
     def interactive_auth(self, root=None):
-        """Open a Tk dialog to authenticate or load a saved session."""
-        # Tk is imported here, not at module level, so the batch CLI works on
-        # Python builds without Tkinter.
+        """Open the Instagram sign-in sheet. Kept for Downloader.authenticate.
+
+        Returns an Instaloader using the new sign-in, or None if cancelled.
+        """
         import tkinter as tk
-        from tkinter import filedialog, messagebox, ttk
 
-        if not INSTALOADER_AVAILABLE:
-            messagebox.showerror('Missing Dependency', 'Instaloader is required for Instagram authenticated downloads')
-            self.logger.error('Instaloader not available for Instagram authentication')
-            return None
-
-        cached_user, cached_path = self._cached_session_info()
-        if cached_user and cached_path and cached_path.exists():
-            # Provide a quick option to reuse the cached session without prompting.
-            try:
-                loader = self._load_cached_client()
-                if loader:
-                    self.logger.info('Reusing cached Instagram session for user %s', cached_user)
-                    return loader
-            except Exception as exc:  # pragma: no cover - best effort
-                self.logger.warning('Failed to use cached session automatically: %s', exc)
+        from ..gui.signin_sheet import SignInSheet
 
         parent = root or tk._default_root
-        dlg = tk.Toplevel(parent)
-        dlg.title('Instagram Login')
-        frm = ttk.Frame(dlg, padding=16)
-        frm.pack(fill=tk.BOTH, expand=True)
+        sheet = SignInSheet(parent, BY_KEY['instagram'])
+        parent.wait_window(sheet)
+        self._signin_loader = None
+        return self._loader_from_signin() if signins.status('instagram').signed_in else None
 
-        ttk.Label(frm, text='Username:').grid(row=0, column=0, sticky='e', padx=(0, 8), pady=4)
-        user_entry = ttk.Entry(frm)
-        user_entry.grid(row=0, column=1, sticky='ew', pady=4)
-        if cached_user:
-            user_entry.insert(0, cached_user)
+    def password_login(self, username, password, ask_code):
+        """Sign in with a username and password and return an Instaloader.
 
-        ttk.Label(frm, text='Password (leave blank to use session file):').grid(row=1, column=0, sticky='e', padx=(0, 8), pady=4)
-        pwd_entry = ttk.Entry(frm, show='*')
-        pwd_entry.grid(row=1, column=1, sticky='ew', pady=4)
-        frm.columnconfigure(1, weight=1)
-
-        sess_var = tk.StringVar(value=str(cached_path) if cached_path else '')
-
-        def pick_session():
-            path = filedialog.askopenfilename(title='Select Instaloader session file')
-            if path:
-                sess_var.set(path)
-                self.logger.info('Selected Instagram session file: %s', path)
-
-        ttk.Button(frm, text='Select Session File', command=pick_session).grid(row=2, column=0, columnspan=2, pady=4)
-        ttk.Label(frm, textvariable=sess_var, anchor='w').grid(row=3, column=0, columnspan=2, sticky='w', pady=2)
-
-        res = {}
-
-        def submit():
-            res['username'] = user_entry.get().strip()
-            res['password'] = pwd_entry.get()
-            res['session_path'] = sess_var.get().strip()
-            dlg.destroy()
-
-        ttk.Button(frm, text='Continue', command=submit).grid(row=4, column=0, columnspan=2, pady=(12, 4))
-
-        frm.pack_propagate(False)
-        dlg.grab_set()
-        parent.wait_window(dlg)
-
-        username = res.get('username') or ''
-        password = res.get('password') or ''
-        session_path = res.get('session_path') or ''
-
-        if not username and session_path:
-            messagebox.showerror('Missing Username', 'A username is required when using an existing session file.')
-            self.logger.error('Username missing for Instagram session reuse')
-            return None
+        ask_code() is called when Instagram asks for a two-factor code and
+        returns the code or None to cancel. Raises SignInError with a message
+        to show the user.
+        """
+        if not INSTALOADER_AVAILABLE:
+            raise SignInError('Instagram sign-in needs the instagram extra: pip install ".[instagram]"')
+        from instaloader.exceptions import (
+            BadCredentialsException,
+            ConnectionException,
+            LoginException,
+            TwoFactorAuthRequiredException,
+        )
 
         loader = Instaloader()
         try:
-            if session_path and username:
-                self.logger.info('Loading Instagram session for %s from %s', username, session_path)
-                loader.load_session_from_file(username, session_path)
-                self._remember_external_session(username, Path(session_path))
-                return loader
-
-            if username and password:
-                self.logger.info('Attempting Instagram login for %s', username)
+            try:
+                loader.login(username, password)
+            except TwoFactorAuthRequiredException:
+                code = ask_code()
+                if not code:
+                    raise SignInError('Sign-in cancelled.')
                 try:
-                    loader.login(username, password)
-                    self.logger.info('Instagram login successful for %s', username)
-                except Exception as exc:
-                    self.logger.warning('Instagram login may require 2FA: %s', exc)
-                    if 'two' in str(exc).lower():
-                        code = self._prompt_2fa(parent)
-                        if code:
-                            loader.two_factor_login(code)
-                            self.logger.info('Instagram 2FA accepted for %s', username)
-                        else:
-                            self.logger.warning('Instagram 2FA code not provided; aborting login')
-                            return None
-                    else:
-                        raise
+                    loader.two_factor_login(code)
+                except BadCredentialsException as exc:
+                    raise SignInError('That code did not work. Check it and try again.') from exc
+        except SignInError:
+            raise
+        except BadCredentialsException as exc:
+            raise SignInError('Wrong username or password.') from exc
+        except (ConnectionException, LoginException) as exc:
+            message = str(exc).lower()
+            if 'checkpoint' in message or 'challenge' in message:
+                raise SignInError(CHECKPOINT_MESSAGE) from exc
+            if 'locked' in message or 'suspended' in message:
+                raise SignInError('This account is locked by Instagram. Use it in your browser to unlock it.') from exc
+            raise SignInError(f'Instagram sign-in failed: {exc}') from exc
+        self.logger.info('Instagram password sign-in worked for %s', username)
+        return loader
 
-                self._remember_loader_session(loader, username)
-                # Offer optional export for the user
-                save_to = filedialog.asksaveasfilename(title='Save session copy (optional)', defaultextension='.session')
-                if save_to:
-                    try:
-                        loader.save_session_to_file(save_to)
-                        self.logger.info('Session exported to %s', save_to)
-                    except Exception as exc:
-                        self.logger.error('Failed to export Instagram session: %s', exc)
-                return loader
-
-        except Exception as exc:
-            messagebox.showerror('Login Error', str(exc))
-            self.logger.error('Instagram authentication error: %s', exc)
-            return None
-
-        return None
+    def save_password_signin(self, loader, username, terms_version):
+        """Store the session's cookies in the shared sign-in store."""
+        platform = BY_KEY['instagram']
+        cookies = signins.cookies_from_jar(loader.context._session.cookies)
+        result = signins.save_signin(platform, cookies, method='password', terms_version=terms_version,
+                                     label=username)
+        self._remember_loader_session(loader, username)
+        self._signin_loader = None
+        return result
 
     # ------------------------------------------------------------------
     def download(self, url, out_dir, options):
@@ -188,7 +143,7 @@ class InstagramHandler:
                     message = str(exc)
                     self.logger.warning('Attempt %s failed for %s: %s', attempt, shortcode, message)
                     if 'login' in message.lower() or 'authenticate' in message.lower():
-                        raise RuntimeError('Instagram requires authentication for this post. Authenticate via the UI first.')
+                        raise RuntimeError('This post needs you to be signed in to Instagram.')
                     if attempt < attempts:
                         time.sleep(1)
                         continue
@@ -197,34 +152,14 @@ class InstagramHandler:
             loader.dirname_pattern = previous_pattern
 
     # ------------------------------------------------------------------
-    def _prompt_2fa(self, parent):
-        """Prompt for a 2FA code."""
-        import tkinter as tk
-        from tkinter import ttk
-
-        dlg = tk.Toplevel(parent)
-        dlg.title('Instagram 2FA')
-        ttk.Label(dlg, text='Enter 2FA code:').pack(padx=16, pady=(16, 4))
-        code_var = tk.StringVar()
-        entry = ttk.Entry(dlg, textvariable=code_var)
-        entry.pack(padx=16, pady=4)
-        entry.focus_set()
-        result = {'code': None}
-
-        def submit():
-            result['code'] = code_var.get().strip()
-            dlg.destroy()
-
-        ttk.Button(dlg, text='Submit', command=submit).pack(pady=(8, 16))
-        dlg.grab_set()
-        parent.wait_window(dlg)
-        return result['code']
-
     def _ensure_loader(self, loader, auth_mode: str):
         if loader:
             return loader
 
         if auth_mode in ('auto', 'authenticated'):
+            from_signin = self._loader_from_signin()
+            if from_signin:
+                return from_signin
             cached = self._load_cached_client()
             if cached:
                 return cached
@@ -232,6 +167,28 @@ class InstagramHandler:
                 raise RuntimeError('No saved Instagram session found. Run Instagram authentication first.')
 
         return Instaloader()
+
+    def _loader_from_signin(self):
+        """Build an Instaloader from the shared cookie sign-in, checked once per handler."""
+        path = signins.cookie_file_for_download('Instagram')
+        if not path:
+            return None
+        stamp = path.stat().st_mtime
+        if self._signin_loader and self._signin_loader[0] == stamp:
+            return self._signin_loader[1]
+        loader = Instaloader()
+        jar = loader.context._session.cookies
+        for c in signins.read_cookies(BY_KEY['instagram']):
+            jar.set(c.name, c.value, domain=c.domain, path=c.path)
+        # the documented way to turn imported cookies into a session
+        username = loader.test_login()
+        if not username:
+            signins.record_result('Instagram', False, 'not logged in')
+            raise RuntimeError('Instagram did not accept your sign-in. Sign in again.')
+        loader.context.username = username
+        self._signin_loader = (stamp, loader)
+        self.logger.info('Using the stored Instagram sign-in for %s', username)
+        return loader
 
     def _cached_session_info(self):
         meta = session_store.read_json(self.SESSION_SOURCE, self.META_FILENAME) or {}
