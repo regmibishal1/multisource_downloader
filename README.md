@@ -98,6 +98,8 @@ Options:
 - Exit codes: `0` everything attempted succeeded, `1` some downloads failed, `2` nothing was attempted because every link was from an unsupported site.
 - `--force` downloads links again even if an earlier run saved them.
 - `--resume` finishes the last run that stopped before it was done (closed window, crash, power cut), in the same download folder. Starting a new run tells you when there is one to resume.
+- Up to 3 links download at once (`--parallel N`, 1 to 6), but never two from the same platform, with a short random pause between links from one platform (8 to 15 seconds on Instagram). When a platform limits requests, the app pauses that platform for 10 minutes, tries the link once more, and keeps going with the others.
+- Ctrl+C stops after the current files and records the rest as not started (press it again to quit at once); `--resume` finishes them later. In the window, **Stop** asks first, then stops within seconds; a file that was not finished is removed.
 - The computer is kept from sleeping while a run is going (the screen may still turn off); `--no-keep-awake` turns that off.
 
 What each run saves

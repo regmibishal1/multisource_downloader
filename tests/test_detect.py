@@ -222,7 +222,9 @@ class BatchDedupeTests(unittest.TestCase):
         fake = Fake()
         with tempfile.TemporaryDirectory() as tmp:
             result = execute_batch(items, Path(tmp), downloader=fake)
-        self.assertEqual(['https://twitter.com/a/status/1?s=20', 'https://youtu.be/dQw4w9WgXcQ'], fake.calls)
+        # downloads on different sites run in parallel, so their order varies
+        self.assertEqual(sorted(['https://twitter.com/a/status/1?s=20', 'https://youtu.be/dQw4w9WgXcQ']),
+                         sorted(fake.calls))
         self.assertEqual([('twitter', 'https://x.com/a/status/1', 'duplicate')], result['skipped'])
 
 

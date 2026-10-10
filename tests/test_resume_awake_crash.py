@@ -54,6 +54,8 @@ class ResumeTests(unittest.TestCase):
     def test_finished_resumed_or_dismissed_runs_are_not_offered(self):
         run = Run(self.root, last_run_pointer=self.pointer)
         run.plan(self.links)
+        for link in self.links:
+            run.download(FakeDownloader({'f.jpg': link['url'].encode()}), 'Twitter', link['url'])
         run.finish()
         self.assertIsNone(runs.last_unfinished_run(self.pointer))
 
@@ -78,11 +80,15 @@ class ResumeTests(unittest.TestCase):
         history = History(self.tmp / 'history.sqlite')
         self.addCleanup(history.close)
         items = [batch.ManifestItem('twitter', link['url']) for link in self.links]
-        with self.assertRaises(KeyboardInterrupt):
-            batch.execute_batch(items, self.root, downloader=Interrupting({'p.jpg': b'1'}), history=history,
-                                last_run_pointer=self.pointer)
+        no_pauses = mock.patch.multiple('multidownloader.runner', DEFAULT_DELAY=(0, 0), DELAYS={})
+        no_pauses.start()
+        self.addCleanup(no_pauses.stop)
+        # Ctrl+C during the second link: the run stops cleanly instead of crashing
+        result = batch.execute_batch(items, self.root, downloader=Interrupting({'p.jpg': b'1'}), history=history,
+                                     last_run_pointer=self.pointer)
+        self.assertTrue(result['stopped'])
         unfinished = runs.last_unfinished_run(self.pointer)
-        self.assertEqual(2, len(unfinished.remaining))
+        self.assertEqual([link['url'] for link in self.links[1:]], [link['url'] for link in unfinished.remaining])
 
         # batch --resume finishes it in the same output folder, with nothing real touched
         manifest_file = self.tmp / 'unused.json'
