@@ -11,6 +11,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from . import detect, platforms, signins
 from .core import Downloader
+from .history import History
 from .runs import Run
 
 SUPPORTED_SOURCES = {p.handler for p in platforms.PLATFORMS}
@@ -100,7 +101,10 @@ def execute_batch(
     dry_run: bool = False,
     logger: Optional[logging.Logger] = None,
     downloader: Optional[Downloader] = None,
+    history: Optional[History] = None,
+    force: bool = False,
 ) -> Dict[str, object]:
+    """Download items. With a history, links saved before are recorded as already saved, unless force."""
     logger = logger or logging.getLogger('multidownloader.batch')
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -108,11 +112,12 @@ def execute_batch(
     if downloader is None:
         downloader = Downloader(str(out_dir), logger=logger)
     # a dry run only plans; a real run records every link in a manifest
-    run = None if dry_run else Run(out_dir)
+    run = None if dry_run else Run(out_dir, history=history, force=force)
 
     counts: Dict[str, int] = {}
     attempted = 0
     completed: List[Tuple[str, str]] = []
+    already: List[Tuple[str, str]] = []
     skipped: List[Tuple[str, str, str]] = []
     errors: List[Tuple[str, str, str]] = []
     seen = set()
@@ -163,6 +168,9 @@ def execute_batch(
         if result.status == 'saved':
             completed.append((handler, item.url))
             logger.info('Saved %s: %s file(s)', item.url, len(result.files))
+        elif result.status == 'already_saved':
+            already.append((handler, item.url))
+            logger.info('Already saved %s on %s', item.url, (result.previous or {}).get('saved_at', '?')[:10])
         else:
             logger.error('Download failed for %s (%s): %s', item.url, handler, result.error_message)
             errors.append((handler, item.url, result.error_message or ''))
@@ -172,6 +180,7 @@ def execute_batch(
     return {
         'attempted': attempted,
         'completed': completed,
+        'already_saved': already,
         'skipped': skipped,
         'errors': errors,
         'run_dir': str(run.dir) if run else None,
@@ -187,6 +196,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument('--limit', type=int, help='Maximum total items to attempt')
     parser.add_argument('--per-source-limit', type=int, help='Maximum items per source to attempt')
     parser.add_argument('--dry-run', action='store_true', help='Only print actions without downloading')
+    parser.add_argument('--force', action='store_true',
+                        help='Download links again even if an earlier run saved them')
     parser.add_argument('--verbose', action='store_true', help='Enable verbose logging')
     return parser
 
@@ -212,9 +223,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         per_source_limit=args.per_source_limit,
         dry_run=args.dry_run,
         logger=logger,
+        history=None if args.dry_run else History(),
+        force=args.force,
     )
 
-    logger.info('Attempted: %s, completed: %s, skipped: %s, errors: %s', result['attempted'], len(result['completed']), len(result['skipped']), len(result['errors']))
+    logger.info('Attempted: %s, completed: %s, already saved: %s, skipped: %s, errors: %s', result['attempted'],
+                len(result['completed']), len(result['already_saved']), len(result['skipped']), len(result['errors']))
     if result['run_dir']:
         logger.info('Report: %s', Path(result['run_dir']) / 'manifest.csv')
 

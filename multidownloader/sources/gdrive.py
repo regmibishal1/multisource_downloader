@@ -78,6 +78,17 @@ def parse_drive_id(url):
     return None, None
 
 
+def _drive_id(url: str) -> Optional[str]:
+    return parse_drive_id(url)[0]
+
+
+def _write_drive_json(media_path: str, details: dict) -> None:
+    """Write <file>.drive.json with what Drive said about the file (brief F13)."""
+    path = media_path + '.drive.json'
+    with open(path, 'w', encoding='utf-8') as fp:
+        json.dump({k: v for k, v in details.items() if v not in (None, [])}, fp, ensure_ascii=False, indent=2)
+
+
 def _looks_private(message: str) -> bool:
     message = (message or '').lower()
     return any(hint in message for hint in _PRIVATE_HINTS)
@@ -237,6 +248,9 @@ class GoogleDriveHandler:
             raise RuntimeError(f'gdown failed: {exc}') from exc
         if not result:
             raise RuntimeError('gdown did not download a file')
+        if isinstance(result, str) and os.path.isfile(result):
+            _write_drive_json(result, {'id': _drive_id(url), 'name': os.path.basename(result), 'source_url': url,
+                                       'downloaded_with': 'gdown'})
         return True
 
     def _download_folder(self, folder_id: str, out_dir: str, cookies_file: Optional[str] = None):
@@ -268,11 +282,18 @@ class GoogleDriveHandler:
         name = file_obj.get('title') or file_obj.get('originalFilename') or file_id
         # Drive titles can contain "/" or "../"; never trust them as a path.
         target_path = str(path_inside(out_dir, name, fallback=file_id))
+        details = {
+            'id': file_id, 'name': name, 'mime_type': file_obj.get('mimeType'),
+            'modified': file_obj.get('modifiedDate'), 'created': file_obj.get('createdDate'),
+            'owners': [o.get('displayName') for o in (file_obj.get('owners') or []) if o.get('displayName')],
+            'md5': file_obj.get('md5Checksum'), 'downloaded_with': 'pydrive2',
+        }
         attempts = 2
         for attempt in range(1, attempts + 1):
             try:
                 file_obj.GetContentFile(target_path)
                 self.logger.info('Downloaded (authenticated) %s', target_path)
+                _write_drive_json(target_path, details)
                 return target_path
             except Exception as exc:  # pragma: no cover - network call
                 self.logger.warning('Attempt %s failed for %s: %s', attempt, file_id, exc)

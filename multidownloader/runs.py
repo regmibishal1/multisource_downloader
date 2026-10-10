@@ -127,6 +127,7 @@ class JobResult:
     backend_version: Optional[str] = None
     source_hint: Optional[str] = None
     skip_reason: Optional[str] = None
+    previous: Optional[Dict] = None  # for already_saved: when and where it was saved before
 
     def to_dict(self) -> Dict:
         return asdict(self)
@@ -166,10 +167,48 @@ def clean_old_staging(root: Path, max_age: float = STAGING_MAX_AGE_S, now: Optio
     return removed
 
 
+
+def _iso_from_ts(value) -> Optional[str]:
+    try:
+        return datetime.fromtimestamp(int(value), timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    except (TypeError, ValueError, OverflowError, OSError):
+        return None
+
+
+def post_from_metadata(path: Path) -> Optional[Dict]:
+    """Read id, uploader, post time and title from a metadata file a backend wrote."""
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    if 'node' in data and isinstance(data['node'], dict):  # Instaloader
+        node = data['node']
+        captions = ((node.get('edge_media_to_caption') or {}).get('edges') or [{}])
+        caption = ((captions[0] or {}).get('node') or {}).get('text') if captions else None
+        return {'id': node.get('shortcode'), 'uploader': (node.get('owner') or {}).get('username'),
+                'posted_at': _iso_from_ts(node.get('taken_at_timestamp')), 'title': caption}
+    if path.name.endswith('.drive.json'):
+        return {'id': data.get('id'), 'uploader': ', '.join(data.get('owners') or []) or None,
+                'posted_at': data.get('modified'), 'title': data.get('name')}
+    if 'extractor' in data or 'webpage_url' in data:  # yt-dlp
+        posted = _iso_from_ts(data.get('timestamp'))
+        if not posted and data.get('upload_date'):
+            d = str(data['upload_date'])
+            posted = f'{d[:4]}-{d[4:6]}-{d[6:8]}'
+        return {'id': data.get('id'), 'uploader': data.get('uploader') or data.get('channel'),
+                'posted_at': posted, 'title': data.get('title')}
+    return None
+
+
 class Run:
     """Downloads for one batch of links, with staging and a manifest."""
 
-    def __init__(self, out_root, *, run_id: Optional[str] = None):
+    def __init__(self, out_root, *, run_id: Optional[str] = None, history=None, force: bool = False):
+        """history: a History to skip links saved before (None: no skipping). force: download them anyway."""
+        self.history = history
+        self.force = force
         self.root = Path(out_root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self.run_id = run_id or new_run_id()
@@ -216,6 +255,14 @@ class Run:
         self._jobs += 1
         result = self._base(url, handler, hint)
         result.started_at = utc_now()
+        if self.history is not None and not self.force:
+            entry = self.history.find(url)
+            if entry:
+                result.status = 'already_saved'
+                result.previous = {'saved_at': entry.first_saved_at, 'output_root': entry.output_root,
+                                   'manifest_path': entry.manifest_path, 'files': entry.files}
+                result.finished_at = utc_now()
+                return self._record(result)
         stage = self.root / STAGING_DIRNAME / f'{self.run_id}_{self._jobs:04d}'
         stage.mkdir(parents=True, exist_ok=True)
         try:
@@ -228,6 +275,7 @@ class Run:
             else:
                 result.status = 'saved'
                 result.files = files
+                self._read_post(result)
         except Exception as exc:  # recorded, not raised: every link gets a result
             result.status = 'failed'
             result.error_detail = str(exc)
@@ -236,7 +284,21 @@ class Run:
         finally:
             shutil.rmtree(stage, ignore_errors=True)
         result.finished_at = utc_now()
+        if result.status == 'saved' and self.history is not None:
+            self.history.add(url, saved_at=result.finished_at, output_root=self.root,
+                             manifest_path=self.dir / 'manifest.jsonl', files=[f.path for f in result.files])
         return self._record(result)
+
+    def _read_post(self, result: JobResult) -> None:
+        """Fill metadata_path and post from the metadata file the backend wrote, if any."""
+        for f in result.files:
+            name = f.path.rsplit('/', 1)[-1]
+            if name.endswith(('.info.json', '.drive.json')) or (name.endswith('.json') and result.backend == 'instaloader'):
+                post = post_from_metadata(self.root / f.path)
+                if post:
+                    result.metadata_path = f.path
+                    result.post = post
+                    return
 
     def _collect(self, stage: Path) -> List[FileRecord]:
         """Hash every file in stage, then move it into the output root at the same relative path."""
@@ -339,5 +401,5 @@ def verify_sums(root, sums_file) -> Iterable[str]:
                 yield f'changed: {rel}'
 
 
-__all__ = ['FileRecord', 'JobResult', 'Run', 'classify', 'clean_old_staging', 'read_manifest', 'sha256_file',
-           'verify_sums']
+__all__ = ['FileRecord', 'JobResult', 'Run', 'classify', 'clean_old_staging', 'post_from_metadata',
+           'read_manifest', 'sha256_file', 'verify_sums']

@@ -35,6 +35,44 @@ def _warn_no_ffmpeg(logger) -> None:
         logger.warning(NO_FFMPEG_MESSAGE)
 
 
+def scrub_info_json(folder) -> int:
+    """Remove cookies from yt-dlp .info.json files under folder; returns files changed.
+
+    yt-dlp can attach the cookies it sent to each format ("cookies", or a
+    Cookie header). Info files are kept with the media and may be shared, so
+    sign-in cookies must never end up in them.
+    """
+    import json
+
+    changed = 0
+
+    def clean(value):
+        if isinstance(value, dict):
+            removed = False
+            for key in [k for k in value if k.lower() == 'cookies']:
+                del value[key]
+                removed = True
+            headers = value.get('http_headers')
+            if isinstance(headers, dict):
+                for key in [k for k in headers if k.lower() == 'cookie']:
+                    del headers[key]
+                    removed = True
+            return any([removed] + [clean(v) for v in value.values()])
+        if isinstance(value, list):
+            return any([clean(v) for v in value])
+        return False
+
+    for path in Path(folder).rglob('*.info.json'):
+        try:
+            data = json.loads(path.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            continue
+        if clean(data):
+            path.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
+            changed += 1
+    return changed
+
+
 class YtDlpHandler:
     """Base handler that wraps yt_dlp with cookie/session persistence support."""
 
@@ -77,6 +115,8 @@ class YtDlpHandler:
                         self.logger.warning('Failed to persist cookies for %s: %s', self.source_key, exc)
         except DownloadError as exc:
             raise RuntimeError(f'yt-dlp failed for {self.source_key}: {exc}') from exc
+        finally:
+            scrub_info_json(out_dir)
 
         return True
 
@@ -93,6 +133,11 @@ class YtDlpHandler:
             'socket_timeout': 30,
             'concurrent_fragment_downloads': 2,
         }
+        if options.get('write_metadata', True):
+            # captions, upload time, uploader and counts are often the evidence;
+            # thumbnails are written beside the media, never embedded in it
+            base_opts['writeinfojson'] = True
+            base_opts['writethumbnail'] = True
 
         if cookie_path:
             base_opts['cookiefile'] = str(cookie_path)
@@ -138,4 +183,4 @@ class YtDlpHandler:
         return signins.cookie_file_for_download(self.source_key)
 
 
-__all__ = ['YtDlpHandler', 'YTDLP_AVAILABLE', 'NO_FFMPEG_MESSAGE', 'ffmpeg_available']
+__all__ = ['YtDlpHandler', 'YTDLP_AVAILABLE', 'NO_FFMPEG_MESSAGE', 'ffmpeg_available', 'scrub_info_json']

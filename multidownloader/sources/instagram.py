@@ -131,6 +131,9 @@ class InstagramHandler:
         escaped_dir = str(out_dir).replace('{', '{{').replace('}', '}}')
         previous_pattern = loader.dirname_pattern
         loader.dirname_pattern = os.path.join(escaped_dir, '{target}')
+        # keep the post's JSON (caption, owner, time) readable next to the media
+        loader.save_metadata = True
+        loader.compress_json = False
         try:
             attempts = 2
             for attempt in range(1, attempts + 1):
