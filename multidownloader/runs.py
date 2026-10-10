@@ -33,7 +33,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
-from . import __version__, detect, signins
+from . import __version__, detect, errors, signins
 
 _log = logging.getLogger(__name__)
 
@@ -85,17 +85,8 @@ def backend_version(backend: str) -> Optional[str]:
 
 
 def classify(message: str) -> str:
-    """A first error kind for the manifest; the full taxonomy (T9) comes later."""
-    if signins.looks_like_block(message):
-        return 'rate_limited'
-    if signins.looks_like_auth_error(message):
-        return 'auth_required'
-    lowered = (message or '').lower()
-    if any(hint in lowered for hint in ('not found', '404', 'unavailable', 'has been removed', 'deleted')):
-        return 'not_found'
-    if any(hint in lowered for hint in ('timed out', 'timeout', 'connection', 'network', 'getaddrinfo')):
-        return 'network'
-    return 'unknown'
+    """The error kind for an error text (see errors.classify for the message and action)."""
+    return errors.classify(message).kind
 
 
 @dataclass
@@ -115,8 +106,9 @@ class JobResult:
     backend: Optional[str]
     status: str                    # saved | already_saved | failed | skipped | stopped
     error_kind: Optional[str] = None
-    error_message: Optional[str] = None
-    error_detail: Optional[str] = None
+    error_message: Optional[str] = None   # plain words for the user (errors.py)
+    error_detail: Optional[str] = None    # the library's own text, for the log
+    error_action: Optional[str] = None    # one next step, e.g. fix_signin, retry
     started_at: Optional[str] = None
     finished_at: Optional[str] = None
     files: List[FileRecord] = field(default_factory=list)
@@ -295,7 +287,7 @@ class Run:
             files = self._collect(stage)
             if not files:
                 result.status = 'failed'
-                result.error_kind = 'no_media'
+                result.error_kind = errors.NO_MEDIA
                 result.error_message = 'The download finished but no file was saved.'
             else:
                 result.status = 'saved'
@@ -303,9 +295,11 @@ class Run:
                 self._read_post(result)
         except Exception as exc:  # recorded, not raised: every link gets a result
             result.status = 'failed'
-            result.error_detail = str(exc)
-            result.error_message = str(exc).splitlines()[0][:500] if str(exc) else type(exc).__name__
-            result.error_kind = classify(str(exc))
+            info = self.explain(exc, url)
+            result.error_kind = info.kind
+            result.error_message = info.message
+            result.error_action = info.action
+            result.error_detail = str(exc) or type(exc).__name__
         finally:
             shutil.rmtree(stage, ignore_errors=True)
         result.finished_at = utc_now()
@@ -313,6 +307,15 @@ class Run:
             self.history.add(url, saved_at=result.finished_at, output_root=self.root,
                              manifest_path=self.dir / 'manifest.jsonl', files=[f.path for f in result.files])
         return self._record(result)
+
+    def explain(self, exc: BaseException, url: str) -> 'errors.ErrorInfo':
+        """Plain message and next step for a failed link."""
+        platform = detect.platform_for_url(url)
+        try:
+            signed_in = bool(platform and signins.cookie_file_for_download(platform.handler))
+        except Exception:
+            signed_in = False
+        return errors.classify(exc, platform=platform.name if platform else '', signed_in=signed_in)
 
     def _read_post(self, result: JobResult) -> None:
         """Fill metadata_path and post from the metadata file the backend wrote, if any."""

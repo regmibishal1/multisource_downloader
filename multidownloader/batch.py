@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from . import detect, logs, platforms, runs, session_store, signins
+from . import detect, errors, logs, platforms, runs, session_store, signins
 from .awake import keep_awake
 from .core import Downloader
 from .history import History
@@ -189,7 +189,8 @@ def _execute(items, run, downloader, logger, *, limit, per_source_limit, dry_run
             already.append((handler, item.url))
             logger.info('Already saved %s on %s', item.url, (result.previous or {}).get('saved_at', '?')[:10])
         else:
-            logger.error('Download failed for %s (%s): %s', item.url, handler, result.error_message)
+            logger.error('Not saved %s: %s', item.url, result.error_message)
+            logger.debug('Details for %s: %s', item.url, result.error_detail)
             errors.append((handler, item.url, result.error_message or ''))
 
     if run:
@@ -203,6 +204,46 @@ def _execute(items, run, downloader, logger, *, limit, per_source_limit, dry_run
         'run_dir': str(run.dir) if run else None,
         'results': run.results if run else [],
     }
+
+
+def next_step(info: errors.ErrorInfo, platform_key: str = '') -> str:
+    """The command or step that fixes a group of failures, for the CLI."""
+    key = platform_key or 'PLATFORM'
+    if info.action == errors.FIX_SIGNIN:
+        return f'Run: multidownloader-signin import {key} --browser firefox'
+    if info.action == errors.RECONNECT:
+        return 'Reconnect Google Drive in Sign-ins (window), Connect with your own Google Cloud project.'
+    if info.action == errors.OPEN_PLATFORM:
+        return 'Open the site in your browser, then run the list again.'
+    if info.action == errors.HOW_TO_UPDATE:
+        return 'Update: python -m pip install -U yt-dlp gallery-dl instaloader gdown'
+    if info.action == errors.HOW_TO_FIX:
+        if 'Deno' in info.message:
+            return 'Install Deno: winget install DenoLand.Deno (or see docs.deno.com)'
+        if 'ffmpeg' in info.message:
+            return 'Install ffmpeg: winget install Gyan.FFmpeg (or your package manager)'
+        return 'See the README, Troubleshooting.'
+    if info.action == errors.SLOW_DOWN:
+        return 'Wait an hour, then run again with fewer links.'
+    if info.action in (errors.WAIT, errors.RETRY):
+        return 'Run the same list again later; saved links are skipped.'
+    if info.action == errors.CHANGE_FOLDER:
+        return 'Choose another folder with --out-dir.'
+    return ''
+
+
+def report_failures(results, logger) -> None:
+    """Failures grouped by cause, the largest group last so it is what stays on screen."""
+    failed = [r for r in results if r.status == 'failed']
+    if not failed:
+        return
+    infos = [(r.input_url, errors.ErrorInfo(r.error_kind or errors.UNKNOWN, r.error_message or '',
+                                            r.error_action, r.error_detail or '')) for r in failed]
+    platform_of = {r.input_url: r.platform or '' for r in failed}
+    for info, urls in reversed(errors.group(infos)):
+        noun = 'link' if len(urls) == 1 else 'links'
+        step = next_step(info, platform_of[urls[0]])
+        logger.error('%s %s: %s%s', len(urls), noun, info.message, f' {step}' if step else '')
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -277,7 +318,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         logger.info('Report: %s', Path(result['run_dir']) / 'manifest.csv')
 
     if result['errors']:
-        logger.error('Some downloads failed. See log for details.')
+        report_failures(result['results'], logger)
+        logger.error('Details are in %s', logs.log_path())
         return 1
     unsupported = sum(1 for *_rest, reason in result['skipped'] if reason == 'unsupported')
     not_attempted = sum(1 for *_rest, reason in result['skipped'] if reason in ('unsupported', 'duplicate'))

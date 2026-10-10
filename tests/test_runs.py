@@ -159,7 +159,7 @@ class RunTests(unittest.TestCase):
 
     def test_classify(self):
         cases = {
-            "Sign in to confirm you're not a bot": 'rate_limited',
+            "Sign in to confirm you're not a bot": 'bot_check',
             'HTTP Error 429: Too Many Requests': 'rate_limited',
             'This post needs you to be signed in to Instagram.': 'auth_required',
             'HTTP Error 404: Not Found': 'not_found',
