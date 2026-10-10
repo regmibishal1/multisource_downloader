@@ -19,12 +19,22 @@ jobs:
         python: ["3.10", "3.13"]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # the public check reads this PR's commit messages
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
           cache: pip
       - name: Install
         run: python -m pip install ".[all,dev]"
+      - name: Public repository check
+        shell: bash
+        run: |
+          if [ -n "${{ github.base_ref }}" ]; then
+            python scripts/check_public.py --commits "origin/${{ github.base_ref }}..HEAD"
+          else
+            python scripts/check_public.py
+          fi
       - name: Lint
         run: python -m ruff check .
       - name: Test

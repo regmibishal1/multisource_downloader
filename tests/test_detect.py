@@ -25,7 +25,7 @@ class ExtractTests(unittest.TestCase):
         ('www.example.com/page', ['https://www.example.com/page']),
         ('youtu.be/abc123 and instagram.com/p/XyZ/', ['https://youtu.be/abc123', 'https://instagram.com/p/XyZ/']),
         ('m.facebook.com/watch?v=1', ['https://m.facebook.com/watch?v=1']),
-        ('mail me at someone@x.com/foo', []),
+        ('mail me at someone@x.com/foo', []),  # public-check: ok (fake address)
         ('dropbox.com/s/abc', []),
         ('notyoutube.com/watch', []),
         ('just x.com with no path', []),
