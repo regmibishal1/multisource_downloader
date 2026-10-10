@@ -1,0 +1,49 @@
+# The run folder and its manifest
+
+Every run, from the window or the command line, writes a folder `_runs/<run id>/` inside the
+download folder. The run id is the start time in UTC plus four random characters, for example
+`2026-10-09T14-03-22Z_9f2c`. The folder holds:
+
+| File | What it is |
+|---|---|
+| `manifest.jsonl` | One JSON object per link, written and flushed as each link finishes, so a crash loses at most the link in progress. |
+| `manifest.csv` | The same rows with the columns below, for spreadsheets. |
+| `SHA256SUMS.txt` | The SHA-256 of every saved file, relative to the download folder. `sha256sum -c _runs/<run id>/SHA256SUMS.txt`, run from the download folder, checks that nothing changed. |
+| `run.json` | The list of links the run was asked to do. With the manifest it tells which links were not done, so an unfinished run can be resumed. |
+
+## Fields in `manifest.jsonl`
+
+| Field | Meaning |
+|---|---|
+| `run_id` | The run this row belongs to. |
+| `input_url` | The link exactly as it was pasted or imported. |
+| `normalized_url` | The same link with tracking parameters removed and the host made canonical; used to spot repeats. |
+| `platform` | `youtube`, `x`, `instagram`, `threads`, `tiktok`, `facebook`, `reddit`, `gdrive`, `bluesky`, or empty for unsupported sites. |
+| `backend` | The program that downloaded it: `yt-dlp`, `instaloader`, `gdown` or `gallery-dl`. |
+| `backend_version` | That program's version, for example `yt-dlp 2026.8.19`. |
+| `app_version` | This app's version. |
+| `status` | `saved`, `already_saved`, `failed`, `skipped` or `stopped`. |
+| `started_at`, `finished_at` | UTC times, `YYYY-MM-DDTHH:MM:SSZ`. |
+| `files` | Each saved file: `path` (relative to the download folder, forward slashes), `bytes`, `sha256`, and `duplicate_of` when an identical file was already there. |
+| `metadata_path` | The post details file among `files`, when there is one. |
+| `post` | What the post details say: `id`, `uploader` (the account), `posted_at`, `title` (caption or title), and `date_source`: `posted` when the folder date is the post's date, `downloaded` when the site gave none. |
+| `error_kind`, `error_message`, `error_action` | For a failed link: the kind of problem, the plain message shown in the app, and the suggested next step. |
+| `error_detail` | The downloader's own error text, for bug reports. |
+| `skip_reason` | For a skipped link: `unsupported` or `duplicate`. |
+| `previous` | For `already_saved`: when and where an earlier run saved it. |
+| `source_hint` | The platform name the link came with in an imported list, if any. |
+| `wayback_url` | Reserved for an Internet Archive copy; empty for now. |
+
+## Columns in `manifest.csv`
+
+`run_id, status, platform, input_url, normalized_url, backend, files, bytes, sha256, error_kind,
+error_message, started_at, finished_at, app_version, backend_version`. The file is UTF-8 with a
+byte order mark, so Excel opens it correctly. `files` and `sha256` list several values separated by
+` | ` for posts with more than one file; `bytes` is their total. For a skipped link, `error_message`
+holds the skip reason.
+
+## Privacy
+
+`post.uploader` and file paths contain the account names of the people in the posts. Exported HTML
+reports leave them out unless you choose to include them, but the manifest always has them. Keep
+the download folder private, and turn on drive encryption (BitLocker on Windows, FileVault on macOS).

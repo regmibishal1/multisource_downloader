@@ -8,6 +8,7 @@ from multidownloader.batch import (
     detect_handler,
     execute_batch,
     load_manifest,
+    read_input,
 )
 
 
@@ -77,6 +78,30 @@ class BatchTests(unittest.TestCase):
             result = execute_batch(items, Path(tmp), downloader=fake)
         self.assertEqual(1, len(result['errors']))
         self.assertEqual(0, len(result['skipped']))
+
+
+
+class ReadInputTests(unittest.TestCase):
+    def test_any_text_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'notes.txt'
+            path.write_text('see https://x.com/a/status/1 and' + chr(10) + 'https://youtu.be/abc123 (twice: https://x.com/a/status/1)',
+                            encoding='utf-8')
+            urls = [item.url for item in read_input(path)]
+        self.assertEqual(['https://x.com/a/status/1', 'https://youtu.be/abc123', 'https://x.com/a/status/1'], urls)
+
+    def test_scraper_json_keeps_its_platform_hint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'grouped_by_source.json'
+            path.write_text(json.dumps({'Twitter': ['https://x.com/a/status/1']}), encoding='utf-8')
+            items = read_input(path)
+        self.assertEqual([('Twitter', 'https://x.com/a/status/1')], [(i.source_hint, i.url) for i in items])
+
+    def test_json_that_is_not_the_scraper_format_is_read_as_text(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'export.json'
+            path.write_text(json.dumps({'messages': [{'text': 'look https://x.com/a/status/9'}]}), encoding='utf-8')
+            self.assertEqual(['https://x.com/a/status/9'], [i.url for i in read_input(path)])
 
 
 if __name__ == '__main__':
