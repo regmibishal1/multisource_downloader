@@ -9,15 +9,10 @@ from typing import Dict, Optional
 try:  # modern yt-dlp versions keep DownloadError in utils but may drop helpers
     import yt_dlp
     from yt_dlp.utils import DownloadError
-    try:
-        from yt_dlp.utils import save_cookies_to_file  # optional helper (removed in some builds)
-    except Exception:  # pragma: no cover - helper is optional
-        save_cookies_to_file = None
     YTDLP_AVAILABLE = True
 except Exception:  # pragma: no cover - module might be missing in minimal envs
     yt_dlp = None
     DownloadError = Exception
-    save_cookies_to_file = None
     YTDLP_AVAILABLE = False
 
 from .. import session_store, signins
@@ -59,12 +54,8 @@ class YtDlpHandler:
                 self.logger.info('yt-dlp download complete: %s', url)
                 if cookie_path and signins.writes_back(self.source_key):
                     try:
-                        if save_cookies_to_file:
-                            save_cookies_to_file(ydl.cookiejar, str(cookie_path), ignore_discard=True, ignore_expires=True)
-                        else:
-                            # newer yt-dlp builds drop the helper; the jar can save itself
-                            ydl.cookiejar.save(str(cookie_path), ignore_discard=True, ignore_expires=True)
-                        self.logger.debug('Updated cookies saved to %s', cookie_path)
+                        if signins.save_refreshed(self.source_key, ydl.cookiejar):
+                            self.logger.debug('Updated cookies saved to %s', cookie_path)
                     except Exception as exc:  # pragma: no cover - best effort
                         self.logger.warning('Failed to persist cookies for %s: %s', self.source_key, exc)
         except DownloadError as exc:

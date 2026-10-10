@@ -444,11 +444,11 @@ def read_browser_cookies(browser: str, profile: Optional[str] = None) -> List[Co
         name = BROWSER_NAMES.get(browser, browser)
         if 'lock' in message.lower():
             raise SignInError(f'Close {name} and try again.') from exc
+        if 'could not find' in message.lower():
+            raise SignInError(f'{name} does not seem to be installed for this user.') from exc
         if browser in CHROMIUM_BROWSERS and sys.platform == 'win32':
             raise SignInError(f'{name} locks its sign-ins on Windows, so this usually fails. '
                               'Use Firefox or a cookies file.') from exc
-        if 'could not find' in message.lower():
-            raise SignInError(f'{name} does not seem to be installed for this user.') from exc
         raise SignInError(f'Could not read {name} sign-ins: {message}') from exc
     return cookies_from_jar(jar)
 
@@ -617,6 +617,26 @@ def cookie_file_for_download(handler_or_key: str) -> Optional[Path]:
     return path
 
 
+def save_refreshed(handler_or_key: str, jar) -> bool:
+    """Write cookies a site refreshed during a download back to the store.
+
+    Keeps only the platform's own domains, so the file does not collect CDN
+    and tracker cookies over time, and never writes a jar that lost the
+    sign-in. Returns True when written.
+    """
+    platform = _platform(handler_or_key)
+    cookies = filter_for(platform, cookies_from_jar(jar))
+    found, expires, _expired = find_markers(platform, cookies)
+    if not found:
+        return False
+    session_store._atomic_write(cookie_path(platform), format_cookies_txt(cookies).encode('utf-8'))
+    meta = read_meta(platform)
+    if meta:
+        meta['marker_expires_at'] = _iso(expires)
+        _write_meta(platform, meta)
+    return True
+
+
 def writes_back(handler_or_key: str) -> bool:
     """Whether yt-dlp may save refreshed cookies into the stored file.
 
@@ -634,8 +654,22 @@ _AUTH_HINTS = ('login required', 'log in', 'sign in', 'signed in', 'authenticat'
                'checkpoint', 'challenge_required', 'not logged')
 
 
+# A platform limiting this computer is not a sign-in problem, even when its
+# message mentions signing in or cookies (YouTube: "Sign in to confirm you're
+# not a bot ... use --cookies"). The app pauses for these and never suggests
+# signing in to get past them (brief 0.8 and 0.11).
+_BLOCK_HINTS = ('not a bot', 'rate-limit', 'rate limit', 'too many requests', 'http error 429')
+
+
+def looks_like_block(message: str) -> bool:
+    message = (message or '').lower()
+    return any(hint in message for hint in _BLOCK_HINTS)
+
+
 def looks_like_auth_error(message: str) -> bool:
     message = (message or '').lower()
+    if looks_like_block(message):
+        return False
     return any(hint in message for hint in _AUTH_HINTS)
 
 
@@ -689,6 +723,6 @@ __all__ = [
     'filter_for', 'find_firefox_signins', 'find_markers', 'firefox_profiles', 'format_cookies_txt',
     'import_cookies_file', 'import_cookies_text', 'import_from_browser', 'looks_like_auth_error',
     'needs_terms_ack', 'parse_cookies_txt', 'preflight_warnings', 'read_cookies', 'read_meta',
-    'record_result', 'refresh_from_browser', 'remove', 'rename', 'remove_all', 'save_signin', 'status', 'summary',
+    'looks_like_block', 'record_result', 'refresh_from_browser', 'remove', 'rename', 'save_refreshed', 'remove_all', 'save_signin', 'status', 'summary',
     'writes_back',
 ]

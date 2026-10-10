@@ -406,6 +406,33 @@ class DownloaderWiringTests(TempStore):
                 downloader.download('Twitter', 'https://x.com/a/status/3')
         refresh.assert_called_once()
 
+    def test_youtube_bot_check_is_not_a_rejected_signin(self):
+        # yt-dlp's real message mentions signing in and cookies, but it is a
+        # block: never mark the sign-in rejected or suggest signing in
+        message = ("ERROR: [youtube] dQw4w9WgXcQ: Sign in to confirm you're not a bot. Use --cookies-from-browser "
+                   'or --cookies for the authentication. See https://github.com/yt-dlp/yt-dlp/wiki/FAQ')
+        self.assertFalse(signins.looks_like_auth_error(message))
+        self.assertTrue(signins.looks_like_block(message))
+        self.assertFalse(signins.looks_like_auth_error('HTTP Error 429: Too Many Requests'))
+        self.assertTrue(signins.looks_like_auth_error('ERROR: [Instagram] abc: login required'))
+
+        yt = BY_KEY['youtube']
+        self.save(yt, cookie_file(line('.youtube.com', 'SAPISID'), line('.youtube.com', 'LOGIN_INFO')))
+        before = signins.read_meta(yt)
+        signins.record_result('YouTube', False, message)
+        self.assertEqual(before, signins.read_meta(yt))
+        self.assertEqual('ready', signins.status(yt).state)
+
+    def test_refreshed_cookies_are_filtered_on_write_back(self):
+        self.save(X, cookie_file(line('.x.com', 'auth_token', 'old')))
+        jar = fake_jar(('.x.com', 'auth_token', 'new'), ('.twimg.com', 'cdn', '1'), ('.doubleclick.net', 'ad', '2'))
+        self.assertTrue(signins.save_refreshed('Twitter', jar))
+        stored = signins.read_cookies(X)
+        self.assertEqual([('auth_token', 'new')], [(c.name, c.value) for c in stored])
+        # a jar that lost the sign-in is not written
+        self.assertFalse(signins.save_refreshed('Twitter', fake_jar(('.x.com', 'guest_id', 'g'))))
+        self.assertEqual('new', signins.read_cookies(X)[0].value)
+
     def test_no_signin_no_record(self):
         downloader = Downloader(str(self.tmp))
         handler = mock.Mock()

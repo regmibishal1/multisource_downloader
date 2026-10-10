@@ -54,6 +54,16 @@ class SignInWindowTests(unittest.TestCase):
         while time.time() < end:
             widget.update()
 
+    def wait_for(self, widget, condition, timeout=5.0):
+        """Run the Tk loop until condition() is true; fail after timeout."""
+        end = time.time() + timeout
+        while time.time() < end:
+            widget.update()
+            if condition():
+                return
+            time.sleep(0.02)
+        self.fail('timed out waiting for the window to update')
+
     def test_manager_lists_every_platform_with_status_and_actions(self):
         from multidownloader.gui.signin_sheet import SignInsWindow
         x = BY_KEY['x']
@@ -87,8 +97,7 @@ class SignInWindowTests(unittest.TestCase):
         self.assertNotIn('disabled', sheet.continue_btn.state())
 
         sheet._continue()
-        self.pump(sheet, 1.0)
-        self.assertIn('✓ Signed in to Instagram.', texts(sheet))
+        self.wait_for(sheet, lambda: '✓ Signed in to Instagram.' in texts(sheet))
         self.assertEqual('ready', signins.status(ig).state)
         sheet.destroy()
 
@@ -101,8 +110,8 @@ class SignInWindowTests(unittest.TestCase):
         sheet.method_var.set('file')
         sheet._update_continue()
         sheet._continue()
-        self.pump(sheet, 1.0)
-        self.assertTrue(sheet.message_var.get().startswith('✕ This file does not contain an X (Twitter) sign-in'))
+        self.wait_for(sheet, lambda: sheet.message_var.get().startswith(
+            '✕ This file does not contain an X (Twitter) sign-in'))
         self.assertFalse(signins.cookie_path(x).exists())
         sheet.destroy()
 

@@ -242,7 +242,14 @@ class SignInSheet(tk.Toplevel):
         self.browser_line.set('Looking for a sign-in in Firefox...')
         self.worker.run(lambda: signins.find_firefox_signins(self.platform), self._firefox_found, self._browser_failed)
 
+    def _alive(self) -> bool:
+        # detection runs on a worker; the sheet may have moved on to its
+        # success view (or closed) before it finishes
+        return self.winfo_exists() and self.continue_btn.winfo_exists()
+
     def _firefox_found(self, found):
+        if not self._alive():
+            return
         self.found_profiles = found
         if not found:
             if not signins.firefox_profiles():
@@ -266,6 +273,8 @@ class SignInSheet(tk.Toplevel):
         self._update_continue()
 
     def _browser_failed(self, message):
+        if not self._alive():
+            return
         self.browser_line.set(message)
         self._update_continue()
 
@@ -282,6 +291,8 @@ class SignInSheet(tk.Toplevel):
             return found and not expired
 
         def done(ok):
+            if not self._alive():
+                return
             name = self.browser_var.get()
             self.found_profiles = ['other'] if ok else []
             self.browser_line.set(f'Found a sign-in in {name}' if ok else f'No {self.platform.name} sign-in found in {name}.')
