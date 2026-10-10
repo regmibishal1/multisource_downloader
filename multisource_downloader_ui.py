@@ -6,7 +6,9 @@ Supports Google Drive, Instagram, TikTok, Threads, Twitter/X, Reddit, Facebook, 
 
 import logging
 import os
+import queue
 import threading
+import time
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -19,6 +21,7 @@ from multidownloader.gui.signin_sheet import SignInSheet, SignInsWindow
 from multidownloader.gui.theme import COLORS
 from multidownloader.platforms import BY_HANDLER
 from multidownloader.history import History
+from multidownloader.runner import HostWaiting, Job, JobFinished, JobProgress, JobStarted, Runner, mmss
 from multidownloader.runs import Run
 
 SOURCE_CHOICES = [
@@ -92,8 +95,22 @@ class DownloaderUI:
         self.src_menu = ttk.Combobox(self.frm, textvariable=self.source_var, values=SOURCE_CHOICES, state='readonly', width=20)
         self.src_menu.grid(row=4, column=1, sticky='w', pady=(0, 5), padx=(0, 5))
 
-        self.download_btn = ttk.Button(self.frm, text='Download', command=self.start_download)
-        self.download_btn.grid(row=6, column=0, columnspan=2, pady=10)
+        buttons = ttk.Frame(self.frm)
+        buttons.grid(row=6, column=0, columnspan=2, pady=10)
+        self.download_btn = ttk.Button(buttons, text='Download', command=self.start_download)
+        self.download_btn.pack(side=tk.LEFT, padx=(0, 8))
+        self.stop_btn = ttk.Button(buttons, text='Stop', command=self.ask_stop)
+        self.stop_btn.pack(side=tk.LEFT)
+        self.stop_btn.state(['disabled'])
+        self.progress = ttk.Progressbar(self.frm, mode='determinate', length=520)
+        self.progress.grid(row=9, column=0, columnspan=2, sticky='ew', pady=(6, 0))
+        self.progress.grid_remove()
+        # the download thread never touches Tk: it queues events, read here
+        self._events = queue.Queue()
+        self._runner = None
+        self._counts = {}
+        self._waiting_until = {}
+        self.root.after(100, self._poll_events)
 
         self.status_label = ttk.Label(self.frm, textvariable=self.status_var, foreground=COLORS['text-2'])
         self.status_label.grid(row=7, column=0, columnspan=2, sticky='w', pady=(0, 5))
@@ -188,58 +205,130 @@ class DownloaderUI:
         # source was read above: the worker thread must not read Tk variables,
         # and changing the dropdown mid-run must not reroute remaining links
         self.download_btn.state(['disabled'])
+        self.stop_btn.state(['!disabled'])
+        self._counts = {'total': len(urls)}
+        self.progress.configure(maximum=max(1, len(urls)), value=0)
+        self.progress.grid()
+        self.status_var.set(f'Saving 1 of {len(urls)}. 0 saved, 0 failed.')
         threading.Thread(
             target=self._download_with_core,
             args=(downloader, run, list(zip(urls, handlers)), source),
             daemon=True,
         ).start()
 
+    @staticmethod
+    def _options(handler):
+        # Google Drive needs no option: public first, the saved sign-in only
+        # when Drive refuses the link
+        opts = {}
+        if handler == 'Instagram':
+            opts['auth'] = 'auto'
+        if handler in COOKIE_SOURCES:
+            opts['use_session'] = True
+        return opts
+
     def _download_with_core(self, downloader, run, links, source):
-        errors = []
+        """Download thread: runs the scheduler and reports through self._events only."""
         urls = [url for url, _handler in links]
+        runner = Runner(run, downloader, on_event=self._events.put)
+        self._runner = runner
+        jobs = [Job(url, handler, self._options(handler)) for url, handler in links]
         try:
             # hold off system sleep for the whole run (brief T21); on this thread,
             # because Windows applies it per thread
             with keep_awake():
-                for i, (url, handler) in enumerate(links, 1):
-                    # Google Drive needs no option: public first, the saved sign-in
-                    # only when Drive refuses the link
-                    opts = {}
-                    if handler == 'Instagram':
-                        opts['auth'] = 'auto'
-                    if handler in COOKIE_SOURCES:
-                        opts['use_session'] = True
-
-                    self.root.after(0, self.status_var.set, f'Saving {i} of {len(links)}: {url}')
-                    logging.info('Delegating download to core: %s %s %s', handler, url, opts)
-                    # staging, hashing and the manifest happen inside run.download
-                    result = run.download(downloader, handler, url, opts)
-                    if result.status == 'saved':
-                        logging.info('Saved %s: %s file(s)', url, len(result.files))
-                    elif result.status == 'already_saved':
-                        logging.info('Already saved %s on %s', url, result.previous['saved_at'][:10])
-                    else:
-                        errors.append((url, result))
-                        logging.error('Not saved %s: %s (%s)', url, result.error_message, result.error_detail)
+                results = runner.run(jobs)
         except BaseException:
             # the run stays unfinished on disk, so it is offered for resuming;
             # the crash handler shows the error
-            self.root.after(0, self.download_btn.state, ['!disabled'])
+            self._events.put(('crashed',))
             raise
         run.finish()
-        self.root.after(0, self._run_finished, source, urls, errors, run)
+        errors = [(r.input_url, r) for r in results if r.status == 'failed']
+        self._events.put(('finished', source, urls, errors, run, runner.stopped))
 
-    def _run_finished(self, source, urls, errors, run=None):
-        """One summary for the whole run instead of a popup per failed link."""
+    # --- progress, from the download thread's events ---------------------------------
+    def _poll_events(self):
+        try:
+            while True:
+                self._handle_event(self._events.get_nowait())
+        except queue.Empty:
+            pass
+        self._show_waiting()
+        self.root.after(100, self._poll_events)
+
+    def _handle_event(self, event):
+        c = self._counts
+        if isinstance(event, tuple):
+            if event[0] == 'finished':
+                self._run_finished(*event[1:])
+            elif event[0] == 'crashed':
+                self._reset_controls()
+            return
+        if isinstance(event, JobStarted):
+            c['started'] = c.get('started', 0) + 1
+        elif isinstance(event, JobFinished):
+            c['done'] = c.get('done', 0) + 1
+            status = event.result.status
+            c[status] = c.get(status, 0) + 1
+            self.progress['value'] = c['done']
+            if status not in ('saved', 'already_saved', 'stopped'):
+                logging.error('Not saved %s: %s (%s)', event.url, event.result.error_message,
+                              event.result.error_detail)
+        elif isinstance(event, HostWaiting):
+            self._waiting_until[event.host] = (event.until, event.message.split(' Waiting')[0])
+        elif isinstance(event, JobProgress) and event.fraction is not None:
+            c['last_progress'] = f' {event.fraction * 100:.0f} %'
+        if isinstance(event, (JobStarted, JobFinished, JobProgress)):
+            total = c.get('total', 0)
+            current = min(total, max(1, c.get('started', 0)))
+            self.status_var.set(f'Saving {current} of {total}. {c.get("saved", 0)} saved, '
+                                f'{c.get("failed", 0)} failed.{c.get("last_progress", "")}')
+
+    def _show_waiting(self):
+        now = time.monotonic()
+        lines = [f'! {message} Waiting {mmss(until - now)} before trying again.'
+                 for until, message in self._waiting_until.values() if until > now]
+        if lines or self._waiting_until:
+            self.notice_var.set('\n'.join(lines))
+            if not lines:
+                self._waiting_until.clear()
+
+    def ask_stop(self):
+        runner = self._runner
+        if not runner or runner.stopped:
+            return
+        waiting = max(0, self._counts.get('total', 0) - self._counts.get('done', 0))
+        if confirm_stop(self.root, waiting):
+            runner.stop()
+            self.stop_btn.state(['disabled'])
+            self.status_var.set('Stopping after the current files...')
+
+    def _reset_controls(self):
         self.download_btn.state(['!disabled'])
+        self.stop_btn.state(['disabled'])
+        self.progress.grid_remove()
+        self._runner = None
+
+    def _run_finished(self, source, urls, errors, run=None, stopped=False):
+        """One summary for the whole run instead of a popup per failed link."""
+        self._reset_controls()
+        self._waiting_until.clear()
+        self.notice_var.set('')
         self.refresh_signin_summary()
         saved = len(urls) - len(errors)
         report = f' Report: {run.dir}' if run else ''
         if run:
-            already = run.counts().get('already_saved', 0)
-            saved -= already
+            counts = run.counts()
+            already = counts.get('already_saved', 0)
+            saved = counts.get('saved', 0)
             if already:
                 report = f' {already} already saved.' + report
+            if stopped:
+                not_started = counts.get('stopped', 0)
+                self.status_var.set(f'Stopped. {saved} saved, {not_started} not started.{report}')
+                self.root.title('Stopped - Multi-Source Downloader')
+                return
         if not errors:
             self.status_var.set(f'Done. {saved} saved.{report}')
             self.root.title('Multi-Source Downloader')
@@ -273,6 +362,36 @@ class DownloaderUI:
         messagebox.showerror('Some downloads failed', listed, parent=self.root)
 
 
+def confirm_stop(parent, waiting: int) -> bool:
+    """The brief's Stop confirmation: Keep downloading is the default, Enter never stops."""
+    dialog = tk.Toplevel(parent)
+    dialog.title('Stop downloading?')
+    dialog.transient(parent)
+    dialog.resizable(False, False)
+    body = ttk.Frame(dialog, padding=24)
+    body.pack(fill=tk.BOTH, expand=True)
+    noun = 'link is' if waiting == 1 else 'links are'
+    ttk.Label(body, wraplength=360, justify='left',
+              text=f'{waiting} {noun} still waiting. The current file will be removed if it is not finished.'
+              ).pack(anchor='w')
+    answer = {'stop': False}
+
+    def stop():
+        answer['stop'] = True
+        dialog.destroy()
+
+    buttons = ttk.Frame(body)
+    buttons.pack(anchor='e', pady=(16, 0))
+    keep = ttk.Button(buttons, text='Keep downloading', command=dialog.destroy)
+    keep.pack(side=tk.LEFT, padx=(0, 8))
+    ttk.Button(buttons, text='Stop', command=stop).pack(side=tk.LEFT)
+    dialog.bind('<Escape>', lambda _e: dialog.destroy())
+    keep.focus_set()
+    dialog.grab_set()
+    parent.wait_window(dialog)
+    return answer['stop']
+
+
 def main():
     # one rotating, redacted log file in the per-user log folder (brief T15)
     logs.setup()
@@ -280,7 +399,7 @@ def main():
     root = tk.Tk()
     app = DownloaderUI(root)
     # errors in callbacks and worker threads get a dialog instead of a silent freeze
-    crash.install(root, on_crash=lambda: app.download_btn.state(['!disabled']))
+    crash.install(root, on_crash=app._reset_controls)
     root.mainloop()
 
 

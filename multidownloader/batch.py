@@ -13,6 +13,7 @@ from . import detect, errors, logs, platforms, runs, session_store, signins
 from .awake import keep_awake
 from .core import Downloader
 from .history import History
+from .runner import DEFAULT_PARALLEL, Job, Runner
 from .runs import Run
 
 SUPPORTED_SOURCES = {p.handler for p in platforms.PLATFORMS}
@@ -107,11 +108,15 @@ def execute_batch(
     include_title: bool = False,
     last_run_pointer: Optional[Path] = None,
     stay_awake: bool = False,
+    parallel: int = DEFAULT_PARALLEL,
+    on_event=None,
 ) -> Dict[str, object]:
     """Download items. With a history, links saved before are recorded as already saved, unless force.
 
     last_run_pointer: record the run there so it can be resumed if it stops.
     stay_awake: hold off system sleep while downloading.
+    parallel: downloads at once (1 to 6); one per platform at a time, with polite pauses.
+    on_event: receives runner events (progress, waits) from worker threads.
     """
     logger = logger or logging.getLogger('multidownloader.batch')
     out_dir = Path(out_dir)
@@ -127,10 +132,11 @@ def execute_batch(
                  for item in items)
     with keep_awake(stay_awake and run is not None):
         return _execute(items, run, downloader, logger, limit=limit, per_source_limit=per_source_limit,
-                        dry_run=dry_run, include_title=include_title)
+                        dry_run=dry_run, include_title=include_title, parallel=parallel, on_event=on_event)
 
 
-def _execute(items, run, downloader, logger, *, limit, per_source_limit, dry_run, include_title):
+def _execute(items, run, downloader, logger, *, limit, per_source_limit, dry_run, include_title, parallel,
+             on_event):
     counts: Dict[str, int] = {}
     attempted = 0
     completed: List[Tuple[str, str]] = []
@@ -138,6 +144,7 @@ def _execute(items, run, downloader, logger, *, limit, per_source_limit, dry_run
     skipped: List[Tuple[str, str, str]] = []
     errors: List[Tuple[str, str, str]] = []
     seen = set()
+    jobs: List[Job] = []
 
     def skip(item, reason, handler=None):
         skipped.append((item.source_hint, item.url, reason))
@@ -181,21 +188,32 @@ def _execute(items, run, downloader, logger, *, limit, per_source_limit, dry_run
             # yt-dlp based handlers reuse session cookies when available
             opts['use_session'] = True
 
-        result = run.download(downloader, handler, item.url, opts, hint=item.source_hint)
-        if result.status == 'saved':
-            completed.append((handler, item.url))
-            logger.info('Saved %s: %s file(s)', item.url, len(result.files))
-        elif result.status == 'already_saved':
-            already.append((handler, item.url))
-            logger.info('Already saved %s on %s', item.url, (result.previous or {}).get('saved_at', '?')[:10])
-        else:
-            logger.error('Not saved %s: %s', item.url, result.error_message)
-            logger.debug('Details for %s: %s', item.url, result.error_detail)
-            errors.append((handler, item.url, result.error_message or ''))
+        jobs.append(Job(item.url, handler, opts, item.source_hint))
+
+    stopped = False
+    if run and jobs:
+        runner = Runner(run, downloader, max_parallel=parallel, on_event=on_event)
+        for result in runner.run(jobs):
+            handler = next((j.handler for j in jobs if j.url == result.input_url), '')
+            if result.status == 'saved':
+                completed.append((handler, result.input_url))
+                logger.info('Saved %s: %s file(s)', result.input_url, len(result.files))
+            elif result.status == 'already_saved':
+                already.append((handler, result.input_url))
+                logger.info('Already saved %s on %s', result.input_url,
+                            (result.previous or {}).get('saved_at', '?')[:10])
+            elif result.status == 'stopped':
+                logger.warning('Stopped %s', result.input_url)
+            else:
+                logger.error('Not saved %s: %s', result.input_url, result.error_message)
+                logger.debug('Details for %s: %s', result.input_url, result.error_detail)
+                errors.append((handler, result.input_url, result.error_message or ''))
+        stopped = runner.stopped
 
     if run:
         run.finish()
     return {
+        'stopped': stopped,
         'attempted': attempted,
         'completed': completed,
         'already_saved': already,
@@ -259,6 +277,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
                         help='Add the post title (first 60 characters) to file names')
     parser.add_argument('--resume', action='store_true',
                         help='Finish the last run that stopped before it was done, in the same output folder')
+    parser.add_argument('--parallel', type=int, default=DEFAULT_PARALLEL, metavar='N',
+                        help='Downloads at once, 1 to 6 (default 3); always one at a time per platform')
     parser.add_argument('--no-keep-awake', action='store_true',
                         help='Let the computer sleep during the run')
     parser.add_argument('--force', action='store_true',
@@ -308,6 +328,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         include_title=args.include_title,
         last_run_pointer=None if args.dry_run else runs.default_last_run_pointer(),
         stay_awake=not args.no_keep_awake,
+        parallel=args.parallel,
     )
     if args.resume and unfinished and result['run_dir']:
         unfinished.close('resumed', by_run=Path(result['run_dir']).name)
@@ -320,6 +341,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if result['errors']:
         report_failures(result['results'], logger)
         logger.error('Details are in %s', logs.log_path())
+    if result.get('stopped'):
+        logger.warning('Stopped. Run with --resume to finish the links that were not done.')
+        return 130
+    if result['errors']:
         return 1
     unsupported = sum(1 for *_rest, reason in result['skipped'] if reason == 'unsupported')
     not_attempted = sum(1 for *_rest, reason in result['skipped'] if reason in ('unsupported', 'duplicate'))

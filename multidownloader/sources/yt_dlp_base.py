@@ -91,6 +91,27 @@ def scrub_info_json(folder) -> int:
     return changed
 
 
+def progress_hook(cancel_event=None, progress=None):
+    """A yt-dlp progress hook that reports bytes and speed and stops on cancel_event.
+
+    progress(downloaded, total, speed) is called while downloading. When
+    cancel_event is set, the hook raises yt-dlp's DownloadCancelled, which
+    stops the download at its next update.
+    """
+    if cancel_event is None and progress is None:
+        return None
+
+    def hook(d):
+        if cancel_event is not None and cancel_event.is_set():
+            from yt_dlp.utils import DownloadCancelled
+            raise DownloadCancelled('Stopped')
+        if progress and d.get('status') == 'downloading':
+            progress(d.get('downloaded_bytes') or 0, d.get('total_bytes') or d.get('total_bytes_estimate'),
+                     d.get('speed'))
+
+    return hook
+
+
 class YtDlpHandler:
     """Base handler that wraps yt_dlp with cookie/session persistence support."""
 
@@ -162,6 +183,11 @@ class YtDlpHandler:
             'socket_timeout': 30,
             'concurrent_fragment_downloads': 2,
         }
+        hook = progress_hook(options.get('cancel_event'), options.get('progress'))
+        if hook:
+            base_opts['progress_hooks'] = [hook]
+            if options.get('progress'):
+                base_opts['noprogress'] = True  # the app shows progress itself
         if options.get('write_metadata', True):
             # captions, upload time, uploader and counts are often the evidence;
             # thumbnails are written beside the media, never embedded in it

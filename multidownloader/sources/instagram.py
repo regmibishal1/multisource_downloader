@@ -121,6 +121,9 @@ class InstagramHandler:
         loader = self._ensure_loader(loader, auth_mode)
 
         os.makedirs(out_dir, exist_ok=True)
+        cancel = options.get('cancel_event')
+        if cancel is not None and cancel.is_set():
+            raise RuntimeError('Stopped before it started.')
         shortcode = parse_shortcode(url)
         if not shortcode:
             raise ValueError('Invalid Instagram link')

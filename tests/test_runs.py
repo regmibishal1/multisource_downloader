@@ -193,8 +193,10 @@ class BatchManifestTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             result = execute_batch(items, Path(tmp), downloader=FakeDownloader({'p.jpg': b'1'}))
             lines = runs.read_manifest(Path(result['run_dir']) / 'manifest.jsonl')
-        self.assertEqual(['saved', 'skipped', 'skipped'], [line['status'] for line in lines])
-        self.assertEqual(['duplicate', 'unsupported'], [line['skip_reason'] for line in lines[1:]])
+        by_url = {line['input_url']: line for line in lines}
+        self.assertEqual('saved', by_url['https://x.com/a/status/1']['status'])
+        self.assertEqual('duplicate', by_url['https://twitter.com/a/status/1']['skip_reason'])
+        self.assertEqual('unsupported', by_url['https://example.org/x']['skip_reason'])
 
     def test_dry_run_writes_nothing(self):
         from multidownloader.batch import ManifestItem, execute_batch

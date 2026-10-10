@@ -27,6 +27,7 @@ import logging
 import os
 import secrets
 import shutil
+import threading
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -212,6 +213,9 @@ class Run:
         self.dir.mkdir(parents=True, exist_ok=False)
         self.results: List[JobResult] = []
         self._jobs = 0
+        # several download threads share one run (runner.py)
+        self._lock = threading.Lock()       # job numbers, manifest lines, results
+        self._move_lock = threading.Lock()  # choosing free names and moving files into place
         self._jsonl = open(self.dir / 'manifest.jsonl', 'a', encoding='utf-8', newline='\n')
         self.finished = False
         self._planned = False
@@ -239,11 +243,25 @@ class Run:
 
     # --- recording -----------------------------------------------------------
     def _record(self, result: JobResult) -> JobResult:
-        self._jsonl.write(json.dumps(result.to_dict(), ensure_ascii=False) + '\n')
-        self._jsonl.flush()
-        os.fsync(self._jsonl.fileno())
-        self.results.append(result)
+        line = json.dumps(result.to_dict(), ensure_ascii=False) + '\n'
+        with self._lock:
+            self._jsonl.write(line)
+            self._jsonl.flush()
+            os.fsync(self._jsonl.fileno())
+            self.results.append(result)
         return result
+
+    def record(self, result: JobResult) -> JobResult:
+        """Record a result produced by download(..., record=False)."""
+        return self._record(result)
+
+    def stopped(self, url: str, *, handler: Optional[str] = None, hint: str = '') -> JobResult:
+        """Record a link that was not started because the run was stopped."""
+        result = self._base(url, handler, hint)
+        result.status = 'stopped'
+        result.error_message = 'Stopped before it started.'
+        result.started_at = result.finished_at = utc_now()
+        return self._record(result)
 
     def _base(self, url: str, handler: Optional[str], hint: str) -> JobResult:
         platform = detect.platform_for_url(url) or (detect.platform_for_hint(hint) if hint else None)
@@ -267,9 +285,15 @@ class Run:
 
     # --- downloading ---------------------------------------------------------
     def download(self, downloader, handler: str, url: str, options: Optional[Dict] = None, *,
-                 hint: str = '') -> JobResult:
-        """Download one link through staging and record the result. Never raises for download errors."""
-        self._jobs += 1
+                 hint: str = '', record: bool = True) -> JobResult:
+        """Download one link through staging and record the result. Never raises for download errors.
+
+        record=False returns the result without writing it, for a caller that
+        may retry the link (runner.py) and records the final result itself.
+        """
+        with self._lock:
+            self._jobs += 1
+            job_number = self._jobs
         result = self._base(url, handler, hint)
         result.started_at = utc_now()
         if self.history is not None and not self.force:
@@ -279,8 +303,8 @@ class Run:
                 result.previous = {'saved_at': entry.first_saved_at, 'output_root': entry.output_root,
                                    'manifest_path': entry.manifest_path, 'files': entry.files}
                 result.finished_at = utc_now()
-                return self._record(result)
-        stage = self.root / STAGING_DIRNAME / f'{self.run_id}_{self._jobs:04d}'
+                return self._record(result) if record else result
+        stage = self.root / STAGING_DIRNAME / f'{self.run_id}_{job_number:04d}'
         stage.mkdir(parents=True, exist_ok=True)
         try:
             downloader.download(handler, url, options or {}, out_dir=str(stage))
@@ -306,7 +330,7 @@ class Run:
         if result.status == 'saved' and self.history is not None:
             self.history.add(url, saved_at=result.finished_at, output_root=self.root,
                              manifest_path=self.dir / 'manifest.jsonl', files=[f.path for f in result.files])
-        return self._record(result)
+        return self._record(result) if record else result
 
     def explain(self, exc: BaseException, url: str) -> 'errors.ErrorInfo':
         """Plain message and next step for a failed link."""
@@ -336,16 +360,18 @@ class Run:
         for src in sorted(p for p in stage.rglob('*') if p.is_file()):
             if src.name.endswith(_TEMP_SUFFIXES):
                 continue
-            digest = sha256_file(src)
+            digest = sha256_file(src)  # hashing runs in parallel; only the move is serialized
             size = src.stat().st_size
-            target = self.root / src.relative_to(stage)
-            if target.exists() and target.is_file() and sha256_file(target) == digest:
-                # the same bytes are already there: keep that file, record both
-                records.append(FileRecord(_rel(target, self.root), size, digest, duplicate_of=_rel(target, self.root)))
-                continue
-            target = _free_name(target)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            os.replace(src, target)  # same drive: atomic, and never over an existing file
+            with self._move_lock:
+                target = self.root / src.relative_to(stage)
+                if target.exists() and target.is_file() and sha256_file(target) == digest:
+                    # the same bytes are already there: keep that file, record both
+                    records.append(FileRecord(_rel(target, self.root), size, digest,
+                                              duplicate_of=_rel(target, self.root)))
+                    continue
+                target = _free_name(target)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                os.replace(src, target)  # same drive: atomic, and never over an existing file
             records.append(FileRecord(_rel(target, self.root), size, digest))
         return records
 
@@ -388,7 +414,9 @@ class Run:
 
     def counts(self) -> Dict[str, int]:
         counts: Dict[str, int] = {}
-        for r in self.results:
+        with self._lock:
+            results = list(self.results)
+        for r in results:
             counts[r.status] = counts.get(r.status, 0) + 1
         return counts
 
@@ -401,6 +429,8 @@ class Run:
             parts.append(f'{c["failed"]} failed')
         if c.get('skipped'):
             parts.append(f'{c["skipped"]} skipped')
+        if c.get('stopped'):
+            parts.append(f'{c["stopped"]} not started')
         return 'Done. ' + ', '.join(parts) + '.'
 
     def __enter__(self):
@@ -490,12 +520,13 @@ def last_unfinished_run(pointer: Optional[Path] = None) -> Optional[UnfinishedRu
         plan = json.loads((run_dir / PLAN_FILENAME).read_text(encoding='utf-8'))
     except (OSError, ValueError, KeyError, TypeError):
         return None
-    if plan.get('finished') or plan.get('closed'):
+    if plan.get('closed'):
         return None
-    done = set()
-    manifest = run_dir / 'manifest.jsonl'
-    if manifest.exists():
-        done = {line.get('input_url') for line in read_manifest(manifest)}
+    # Not done: every planned link without a result other than "stopped". That
+    # covers a run that never finished (crash, power cut), links the user
+    # stopped, and a link that was mid-download when the run was interrupted.
+    lines = read_manifest(run_dir / 'manifest.jsonl') if (run_dir / 'manifest.jsonl').exists() else []
+    done = {line.get('input_url') for line in lines if line.get('status') != 'stopped'}
     remaining = [link for link in plan.get('links', []) if link.get('url') not in done]
     if not remaining:
         return None
