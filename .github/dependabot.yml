@@ -1,0 +1,20 @@
+# Monthly version-update PRs, as reminders (security alerts and security updates are on separately).
+# Dependabot reads pyproject.toml (the lowest versions the app works with) and the CI workflow's actions.
+# requirements.txt and requirements-lock.txt are left out: they pin the project environment (penv) and
+# are updated together through it (DEPENDENCIES.md, "Updating a dependency"), which a bump to one file
+# alone would break (tests/test_dependencies.py checks the three files agree).
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    exclude-paths:
+      - "requirements*.txt"
+    schedule:
+      interval: monthly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
