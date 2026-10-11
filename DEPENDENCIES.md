@@ -31,6 +31,10 @@ To go back, reinstall from the saved freeze: `.\penv\Scripts\python.exe -m pip i
 Change log
 ----------
 
+### 2026-10-11
+
+- `google-auth` 2.40.3 to 2.61.0, for "Connect with your own Google Cloud project". Its signing code now uses `cryptography` (added, 50.0.2, which has no open alerts) instead of `rsa` and `cachetools`, which were removed from `penv` as nothing else needs them. `google-auth-oauthlib` 1.5.0 stays; it accepts this version.
+
 ### 2026-10-10
 
 - `instaloader` 4.15 to 4.15.3 (and 4.15.3 as the lowest version in `pyproject.toml`): Instagram changed its API and 4.15 failed every post with "JSON Query to graphql/query: Expecting value"; 4.15.3 fixes post metadata fetching. The app now also falls back to yt-dlp with the same sign-in when Instaloader fails, and the daily update check covers Instaloader.
