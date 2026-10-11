@@ -38,7 +38,15 @@ jobs:
       - name: Lint
         run: python -m ruff check .
       - name: Test
-        run: python -m unittest discover -s tests -p "test_*.py" -v
+        # Linux runners have no display: the window tests get a virtual one
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            command -v xvfb-run >/dev/null || { sudo apt-get update -q && sudo apt-get install -yq xvfb; }
+            xvfb-run -a python -m unittest discover -s tests -p "test_*.py" -v
+          else
+            python -m unittest discover -s tests -p "test_*.py" -v
+          fi
 
   windows-app:
     # brief Q2: build the Windows app and check the frozen build itself

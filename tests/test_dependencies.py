@@ -48,13 +48,13 @@ class AgreementTests(unittest.TestCase):
         project = tomllib.loads((ROOT / 'pyproject.toml').read_text(encoding='utf-8'))['project']
         required = list(project['dependencies'])
         for extra, items in project['optional-dependencies'].items():
-            required += [r for r in items if not r.startswith('multisource-downloader')]
+            if extra == 'dev':
+                continue  # development and test tools, not pinned for penv
+            required +=[r for r in items if not r.startswith('multisource-downloader')]
         pinned = pins('requirements.txt')
         for text in required:
             req = Requirement(text)
             with self.subTest(requirement=text):
-                if canonical(req.name) == 'ruff':
-                    continue  # a development tool, not pinned for penv
                 self.assertIn(canonical(req.name), pinned, 'used by the app but not pinned in requirements.txt')
                 self.assertTrue(req.specifier.contains(pinned[canonical(req.name)], prereleases=True),
                                 f'{req.name} {pinned[canonical(req.name)]} does not satisfy {req.specifier}')

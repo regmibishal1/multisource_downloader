@@ -29,7 +29,9 @@ webview = ["pywebview>=5"]
 # the app only runs it as a separate program and never imports it.
 images = ["gallery-dl>=1.26"]
 all = ["multisource-downloader[instagram,drive,webview,images]"]
-dev = ["ruff>=0.6"]
+# Development and test tools: bagit-python checks that other BagIt tools accept
+# our packages; packaging checks the pins against the ranges above.
+dev = ["ruff>=0.6", "bagit>=1.9", "packaging"]
 
 [project.scripts]
 msdl = "multidownloader.cli:main"

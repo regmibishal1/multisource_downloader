@@ -141,6 +141,12 @@ class QueueWindowTests(unittest.TestCase):
             self.app._run_finished(None, [a], [(a, failed)], run)
         self.assertEqual('1 link needs an Instagram sign-in. Sign in now?', ask.call_args.args[1])
 
+    def test_menu_key_opens_the_row_menu(self):
+        # the keyboard's menu key has a different name in Tk on each platform
+        bound = set(self.table.tree.bind())
+        self.assertIn('<Shift-Key-F10>', bound)
+        self.assertTrue({'<Key-App>', '<Key-Menu>'} & bound, bound)
+
     def test_download_again_and_remove(self):
         a = 'https://x.com/a/status/1'
         self.table.reset([(a, 'Twitter')])
