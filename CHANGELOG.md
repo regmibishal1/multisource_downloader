@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- `requirements-minimal.txt` still listed PyDrive2, which 0.3.1 replaced: it now lists `google-auth`
+  and `google-auth-oauthlib`, the libraries "Connect with your own Google Cloud project" uses.
+
 ## 0.3.1 (2026-10-10)
 
 Fixes found by testing every platform by hand, and security updates.

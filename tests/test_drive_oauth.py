@@ -168,8 +168,8 @@ class ConnectTests(unittest.TestCase):
 class NoPyDrive2Tests(unittest.TestCase):
     def test_gone_from_the_project(self):
         root = Path(__file__).resolve().parents[1]
-        for name in ('pyproject.toml', 'requirements.txt', 'requirements-lock.txt', 'scripts/build_exe.py',
-                     'scripts/third_party_licenses.py', 'multidownloader/sources/gdrive.py'):
+        for name in ('pyproject.toml', 'requirements.txt', 'requirements-minimal.txt', 'requirements-lock.txt',
+                     'scripts/build_exe.py', 'scripts/third_party_licenses.py', 'multidownloader/sources/gdrive.py'):
             with self.subTest(file=name):
                 self.assertNotIn('pydrive2', (root / name).read_text(encoding='utf-8').lower())
 
