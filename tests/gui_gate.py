@@ -4,7 +4,12 @@ They run in CI (GitHub sets CI=true) or when MSDL_GUI_TESTS=1. On a working
 computer they stay off: a test window takes the keyboard focus for a moment,
 so typing elsewhere lands in it and Windows plays its invalid-input sound.
 """
+import faulthandler
 import os
+
+if os.environ.get('CI'):
+    # the suite takes about a minute: a hang ends after 10 with every thread's stack
+    faulthandler.dump_traceback_later(600, exit=True)
 
 
 def gui_tests_enabled() -> bool:
