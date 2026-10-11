@@ -7,6 +7,13 @@
 - `requirements-minimal.txt` still listed PyDrive2, which 0.3.1 replaced: it now lists `google-auth`
   and `google-auth-oauthlib`, the libraries "Connect with your own Google Cloud project" uses.
 
+### Tests
+
+- Three groups of tests never ran in CI: the check that other BagIt tools accept our packages (bagit-python
+  was not installed anywhere), the check of the pinned versions against pyproject.toml (packaging
+  missing), and the 43 window tests on Ubuntu (no display). The `dev` extra now installs both tools,
+  Ubuntu runs the tests on a virtual display, and a CI-only test fails if any of them is missing again.
+
 ## 0.3.1 (2026-10-10)
 
 Fixes found by testing every platform by hand, and security updates.
