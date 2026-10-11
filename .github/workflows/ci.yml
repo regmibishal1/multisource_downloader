@@ -38,12 +38,6 @@ jobs:
           fi
       - name: Lint
         run: python -m ruff check .
-      - name: Diagnostic (temporary)
-        if: runner.os == 'macOS'
-        continue-on-error: true
-        run: |
-          python .github/diag_mac.py visible || true
-          python .github/diag_mac.py onebyone || true
       - name: Test
         # Linux runners have no display: the window tests get a virtual one
         shell: bash

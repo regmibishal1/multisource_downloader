@@ -42,7 +42,14 @@ def hidden_root(test):
     import tkinter as tk
 
     root = tk.Tk()
-    root.withdraw()
+    if root.tk.call('tk', 'windowingsystem') == 'aqua':
+        # Tk 8.6 on macOS hangs in update() after a classic Label is destroyed inside a
+        # withdrawn window (its dialogs are withdrawn with it), so keep the root mapped
+        # but see-through and off the screen instead
+        root.attributes('-alpha', 0.0)
+        root.geometry('1x1+-10000+-10000')
+    else:
+        root.withdraw()
 
     def release():
         for name in [n for n in vars(test) if not n.startswith('_')]:
