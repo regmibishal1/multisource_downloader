@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- `google-auth` 2.61.0 (was 2.40.3) for "Connect with your own Google Cloud project". It brings
+  `cryptography` 50.0.2 in place of `rsa` and `cachetools`.
+
 ## 0.3.2 (2026-10-11)
 
 Fixes for Linux and macOS, found by running the window tests on every system in CI.
