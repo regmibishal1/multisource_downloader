@@ -6,6 +6,8 @@
 
 - **Linux:** the main window could not open: the queue's keyboard menu key was bound by its Windows
   name only, which Tk on Linux rejects. Found by running the window tests on Ubuntu in CI.
+- **macOS:** right-click did not open the queue's menus (Tk there numbers the right button 2).
+  Control-click works too.
 - `requirements-minimal.txt` still listed PyDrive2, which 0.3.1 replaced: it now lists `google-auth`
   and `google-auth-oauthlib`, the libraries "Connect with your own Google Cloud project" uses.
 
@@ -15,6 +17,7 @@
   was not installed anywhere), the check of the pinned versions against pyproject.toml (packaging
   missing), and the 43 window tests on Ubuntu (no display). The `dev` extra now installs both tools,
   Ubuntu runs the tests on a virtual display, and a CI-only test fails if any of them is missing again.
+- CI tests on macOS too, and a hung test run stops after 10 minutes with every thread's stack.
 
 ## 0.3.1 (2026-10-10)
 
