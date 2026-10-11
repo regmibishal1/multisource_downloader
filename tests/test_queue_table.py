@@ -147,6 +147,12 @@ class QueueWindowTests(unittest.TestCase):
         self.assertIn('<Shift-Key-F10>', bound)
         self.assertTrue({'<Key-App>', '<Key-Menu>'} & bound, bound)
 
+    def test_right_click_opens_the_row_menu(self):
+        bound = set(self.table.tree.bind())
+        self.assertIn('<Button-3>', bound)
+        if self.root.tk.call('tk', 'windowingsystem') == 'aqua':  # the right button is 2 in Tk 8.6 on macOS
+            self.assertTrue({'<Button-2>', '<Control-Button-1>'} <= bound, bound)
+
     def test_download_again_and_remove(self):
         a = 'https://x.com/a/status/1'
         self.table.reset([(a, 'Twitter')])
