@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- **Linux:** the main window could not open: the queue's keyboard menu key was bound by its Windows
+  name only, which Tk on Linux rejects. Found by running the window tests on Ubuntu in CI.
 - `requirements-minimal.txt` still listed PyDrive2, which 0.3.1 replaced: it now lists `google-auth`
   and `google-auth-oauthlib`, the libraries "Connect with your own Google Cloud project" uses.
 

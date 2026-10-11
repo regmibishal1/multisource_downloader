@@ -118,8 +118,11 @@ class QueueTable(ttk.Frame):
 
         self.tree.bind('<Return>', self._open)
         self.tree.bind('<Double-1>', self._open)
-        for sequence in ('<Button-3>', '<Shift-F10>', '<App>'):
-            self.tree.bind(sequence, self._menu)
+        for sequence in ('<Button-3>', '<Shift-F10>', '<App>', '<Menu>'):
+            try:
+                self.tree.bind(sequence, self._menu)
+            except tk.TclError:  # Tk calls the menu key "App" on Windows and "Menu" on Linux
+                pass
         # column widths can be dragged, so they can also be reset without dragging (WCAG 2.5.7)
         self.tree.bind('<Button-3>', self._heading_menu, add='+')
         self.tree.bind('<<TreeviewSelect>>', lambda _e: self._see_selection())
