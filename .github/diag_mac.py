@@ -1,6 +1,5 @@
 # Temporary: find where the sign-in success screen hangs Tk on macOS. Removed before merging.
 import faulthandler
-import json
 import sys
 import tempfile
 import time
